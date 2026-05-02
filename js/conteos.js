@@ -75,12 +75,16 @@ function renderList() {
         const c = counts[p.ref];
         const counted = c?.qty > 0;
         return `<div class="prod-item" data-ref="${p.ref}">
-          <div class="prod-avatar" style="${counted ? 'background:linear-gradient(135deg,var(--green),#34C759)' : ''}">
-            ${(p.family || '?').slice(0, 2).toUpperCase()}
-          </div>
           <div style="flex:1;min-width:0">
-            <div class="prod-name">${p.name}</div>
-            <div class="prod-meta">${p.ref} · EAN ${p.ean || '—'}</div>
+            <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-bottom:4px">
+              <span class="prod-tag ${counted ? 'tag-counted' : 'tag-ref'}">${p.ref}</span>
+              ${p.proxium ? `<span class="prod-tag tag-proxium">${p.proxium}</span>` : ''}
+              <div class="prod-name" style="flex:1;min-width:80px">${p.name}</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+              ${p.family ? `<span class="prod-tag tag-family">${p.family}</span>` : ''}
+              ${p.ean ? `<span style="font-size:0.6rem;color:var(--text3)">▪ ${p.ean}</span>` : ''}
+            </div>
           </div>
           ${counted
             ? `<div class="prod-qty-badge" style="color:var(--green)">${c.qty}<small>uds</small></div>`

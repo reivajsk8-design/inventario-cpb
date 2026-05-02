@@ -273,5 +273,24 @@
   font-size: 0.88rem; font-weight: 800;
 }
 
+/* ── PRODUCT TAGS ── */
+.prod-tag {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 6px;
+  padding: 2px 8px;
+  font-size: 0.6rem;
+  font-weight: 700;
+  white-space: nowrap;
+  flex-shrink: 0;
+  letter-spacing: 0.02em;
+}
+.tag-ref     { background: var(--surface2); color: var(--text2); }
+.tag-proxium { background: rgba(10,132,255,0.15); color: var(--accent); }
+.tag-family  { background: rgba(255,255,255,0.05); color: var(--text3); border: 0.5px solid var(--separator); }
+.tag-edited  { background: rgba(255,159,10,0.15); color: var(--amber); }
+.tag-counted { background: rgba(48,209,88,0.15);  color: var(--green); }
+.tag-ordered { background: rgba(10,132,255,0.15); color: var(--accent); }
+
 /* ── SPIN ANIMATION ── */
 @keyframes spin { to { transform: rotate(360deg); } }
