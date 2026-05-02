@@ -418,8 +418,9 @@ function openCropEditor(imgSrc, onDone) {
       <img id="c-img" src="${imgSrc}" style="max-width:100%;max-height:100%;object-fit:contain;display:block;user-select:none">
       <canvas id="c-cvs" style="position:absolute;touch-action:none"></canvas>
     </div>
-    <div style="background:#1C1C1E;padding:10px;text-align:center;flex-shrink:0">
-      <span style="color:#888;font-size:0.7rem">Arrastra las esquinas para ajustar el documento</span>
+    <div style="background:#1C1C1E;padding:10px;display:flex;align-items:center;justify-content:center;gap:16px;flex-shrink:0">
+      <button id="c-auto" style="color:#0A84FF;font-size:0.78rem;font-weight:700;padding:6px 14px;background:rgba(10,132,255,0.15);border-radius:20px">🔍 Auto-detectar</button>
+      <span style="color:#666;font-size:0.68rem">Arrastra las esquinas para ajustar</span>
     </div>`;
   document.body.appendChild(ov);
 
@@ -498,6 +499,12 @@ function openCropEditor(imgSrc, onDone) {
 
     draw();
 
+    ov.querySelector('#c-auto').addEventListener('click', () => {
+      const detected = autoDetectCorners(img, ir.width, ir.height);
+      detected.forEach((p, i) => { corners[i].x = p.x; corners[i].y = p.y; });
+      draw();
+    });
+
     ov.querySelector('#c-apply').addEventListener('click', async () => {
       const btn = ov.querySelector('#c-apply');
       btn.textContent = '…'; btn.disabled = true;
@@ -547,15 +554,21 @@ function perspectiveCorrect(img, srcPts) {
 
   for (let y = 0; y < finalH; y++) {
     for (let x = 0; x < finalW; x++) {
-      const w  = H[6]*x + H[7]*y + H[8];
-      const sx = Math.round((H[0]*x + H[1]*y + H[2]) / w);
-      const sy = Math.round((H[3]*x + H[4]*y + H[5]) / w);
-      if (sx < 0 || sy < 0 || sx >= sampW || sy >= sampH) continue;
-      const si = (sy * sampW + sx) * 4;
-      const di = (y  * finalW + x) * 4;
-      outD.data[di]   = srcD[si];
-      outD.data[di+1] = srcD[si+1];
-      outD.data[di+2] = srcD[si+2];
+      const w   = H[6]*x + H[7]*y + H[8];
+      const sxf = (H[0]*x + H[1]*y + H[2]) / w;
+      const syf = (H[3]*x + H[4]*y + H[5]) / w;
+      if (sxf < 0 || syf < 0 || sxf >= sampW - 1 || syf >= sampH - 1) continue;
+      const x0 = sxf | 0, y0 = syf | 0;
+      const fx = sxf - x0, fy = syf - y0;
+      const fx1 = 1 - fx, fy1 = 1 - fy;
+      const i00 = (y0       * sampW + x0)     * 4;
+      const i10 = (y0       * sampW + x0 + 1) * 4;
+      const i01 = ((y0 + 1) * sampW + x0)     * 4;
+      const i11 = ((y0 + 1) * sampW + x0 + 1) * 4;
+      const di  = (y * finalW + x) * 4;
+      outD.data[di]   = (srcD[i00]   * fx1*fy1 + srcD[i10]   * fx*fy1 + srcD[i01]   * fx1*fy + srcD[i11]   * fx*fy + 0.5) | 0;
+      outD.data[di+1] = (srcD[i00+1] * fx1*fy1 + srcD[i10+1] * fx*fy1 + srcD[i01+1] * fx1*fy + srcD[i11+1] * fx*fy + 0.5) | 0;
+      outD.data[di+2] = (srcD[i00+2] * fx1*fy1 + srcD[i10+2] * fx*fy1 + srcD[i01+2] * fx1*fy + srcD[i11+2] * fx*fy + 0.5) | 0;
       outD.data[di+3] = 255;
     }
   }
@@ -573,6 +586,80 @@ function computeH(src, dst) {
   }
   const h = gaussElim(A, b);
   return [...h, 1];
+}
+
+// ── Auto-detección de esquinas del documento ──────────────────────
+function autoDetectCorners(img, displayW, displayH) {
+  // Downscale para procesar rápido
+  const S = 600;
+  const scale = Math.min(1, S / Math.max(img.naturalWidth, img.naturalHeight));
+  const W = (img.naturalWidth  * scale) | 0;
+  const H = (img.naturalHeight * scale) | 0;
+
+  const c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  c.getContext('2d').drawImage(img, 0, 0, W, H);
+  const px = c.getContext('2d').getImageData(0, 0, W, H).data;
+
+  // Grayscale
+  const gray = new Float32Array(W * H);
+  for (let i = 0; i < W * H; i++)
+    gray[i] = 0.299*px[i*4] + 0.587*px[i*4+1] + 0.114*px[i*4+2];
+
+  // Gaussian 3×3
+  const blur = new Float32Array(W * H);
+  for (let y = 1; y < H-1; y++) {
+    for (let x = 1; x < W-1; x++) {
+      blur[y*W+x] = (
+        gray[(y-1)*W+(x-1)] + 2*gray[(y-1)*W+x] + gray[(y-1)*W+(x+1)] +
+        2*gray[y*W+(x-1)]   + 4*gray[y*W+x]     + 2*gray[y*W+(x+1)] +
+        gray[(y+1)*W+(x-1)] + 2*gray[(y+1)*W+x] + gray[(y+1)*W+(x+1)]
+      ) / 16;
+    }
+  }
+
+  // Sobel magnitude
+  const edges = new Float32Array(W * H);
+  for (let y = 1; y < H-1; y++) {
+    for (let x = 1; x < W-1; x++) {
+      const gx = -blur[(y-1)*W+(x-1)] + blur[(y-1)*W+(x+1)]
+                 -2*blur[y*W+(x-1)]   + 2*blur[y*W+(x+1)]
+                 -blur[(y+1)*W+(x-1)] + blur[(y+1)*W+(x+1)];
+      const gy = -blur[(y-1)*W+(x-1)] - 2*blur[(y-1)*W+x] - blur[(y-1)*W+(x+1)]
+                 +blur[(y+1)*W+(x-1)] + 2*blur[(y+1)*W+x] + blur[(y+1)*W+(x+1)];
+      edges[y*W+x] = Math.sqrt(gx*gx + gy*gy);
+    }
+  }
+
+  // Proyecciones (ignorar 5% del borde para evitar el marco de la foto)
+  const mX = (W * 0.05) | 0, mY = (H * 0.05) | 0;
+  const rowSum = new Float32Array(H);
+  const colSum = new Float32Array(W);
+  for (let y = mY; y < H-mY; y++)
+    for (let x = mX; x < W-mX; x++) {
+      rowSum[y] += edges[y*W+x];
+      colSum[x] += edges[y*W+x];
+    }
+
+  // Pico de cada proyección en su mitad correspondiente
+  const peak = (arr, from, to) => {
+    let maxV = 0, maxI = from;
+    for (let i = from; i < to; i++) if (arr[i] > maxV) { maxV = arr[i]; maxI = i; }
+    return maxI;
+  };
+  const topRow    = peak(rowSum, mY,            (H * 0.50) | 0);
+  const bottomRow = peak(rowSum, (H * 0.50)|0,   H - mY);
+  const leftCol   = peak(colSum, mX,            (W * 0.50) | 0);
+  const rightCol  = peak(colSum, (W * 0.50)|0,   W - mX);
+
+  // Convertir a coordenadas del canvas de visualización
+  const sx = displayW / W, sy = displayH / H;
+  return [
+    { x: leftCol  * sx, y: topRow    * sy },  // TL
+    { x: rightCol * sx, y: topRow    * sy },  // TR
+    { x: rightCol * sx, y: bottomRow * sy },  // BR
+    { x: leftCol  * sx, y: bottomRow * sy },  // BL
+  ];
 }
 
 function gaussElim(A, b) {
