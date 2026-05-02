@@ -1,6 +1,6 @@
 // sw.js — Service Worker para Inventario CPB
 // Incrementa CACHE_NAME con cada despliegue para forzar actualización
-const CACHE_NAME = 'cpb-v7';
+const CACHE_NAME = 'cpb-v8';
 
 const PRECACHE = [
   './',
