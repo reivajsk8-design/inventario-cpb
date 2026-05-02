@@ -29,7 +29,7 @@ async function init() {
     hideLoading();
   }
 
-  checkDBVersion();
+  checkDBVersion().catch(err => console.warn('checkDBVersion failed:', err));
 
   document.getElementById('tabs').addEventListener('click', e => {
     const btn = e.target.closest('[data-tab]');
@@ -50,6 +50,7 @@ async function init() {
 }
 
 function switchTab(tab) {
+  if (!TABS[tab]) { console.warn('Unknown tab:', tab); return; }
   if (_currentTab === tab) return;
   if (_currentTab && TABS[_currentTab]) TABS[_currentTab].unmount();
 
@@ -99,4 +100,8 @@ const style = document.createElement('style');
 style.textContent = '@keyframes spin { to { transform: rotate(360deg); } }';
 document.head.appendChild(style);
 
-init();
+init().catch(err => {
+  document.getElementById('main').innerHTML =
+    `<div class="empty-state"><div class="icon">⚠️</div><p>Error al arrancar: ${err.message}</p></div>`;
+  console.error(err);
+});
