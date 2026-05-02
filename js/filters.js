@@ -105,3 +105,4 @@ export function unmountFilterBar() {
   el.classList.add('hidden');
   el.innerHTML = '';
 }
+// test
