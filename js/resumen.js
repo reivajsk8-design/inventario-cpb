@@ -1,10 +1,12 @@
 // js/resumen.js
 import { getAllProducts } from './db.js';
 
-let _all = [];
+let _all = [], _rawAll = [];
 
 export async function mount() {
-  _all = await getAllProducts();
+  _rawAll = await getAllProducts();
+  const editOvr = JSON.parse(localStorage.getItem('ie') || '{}');
+  _all = _rawAll.map(p => editOvr[p.ref] ? { ...p, ...editOvr[p.ref] } : p);
   render();
 }
 
@@ -36,8 +38,8 @@ function render() {
       </div>
       <div class="stat-card">
         <div class="stat-label">Ediciones locales</div>
-        <div class="stat-value">${editCount}</div>
-        <div class="stat-sub">productos modificados</div>
+        <div class="stat-value" style="${editCount > 0 ? 'color:var(--amber)' : ''}">${editCount}</div>
+        <div class="stat-sub">artículos modificados</div>
       </div>
       <div class="stat-card">
         <div class="stat-label">Total catálogo</div>
@@ -57,6 +59,11 @@ function render() {
     <button class="export-btn" id="btn-exp-counts">⬇ Exportar inventario (Excel)</button>
     <button class="export-btn" id="btn-exp-orders"
       style="background:var(--surface2);color:var(--text)">⬇ Exportar pedidos (Excel)</button>
+    ${editCount > 0 ? `
+    <button class="export-btn" id="btn-exp-edits"
+      style="background:rgba(255,159,10,0.15);color:var(--amber);border:1px solid rgba(255,159,10,0.3)">
+      ✏️ Exportar modificaciones (${editCount} artículos)
+    </button>` : ''}
     <button class="export-btn" id="btn-reset"
       style="background:rgba(255,69,58,0.12);color:var(--red);margin-top:20px">
       🗑 Borrar todos los conteos y pedidos
@@ -72,6 +79,9 @@ function render() {
 
   document.getElementById('btn-exp-orders').addEventListener('click', () =>
     exportExcel('pedidos', buildOrdersRows(orders)));
+
+  document.getElementById('btn-exp-edits')?.addEventListener('click', () =>
+    exportExcel('modificaciones', buildEditsRows(editOvr)));
 
   document.getElementById('btn-reset').addEventListener('click', () => {
     if (!confirm('¿Borrar todos los conteos y pedidos? Esta acción no se puede deshacer.')) return;
@@ -106,6 +116,22 @@ function buildOrdersRows(orders) {
       .map(([ref, qty]) => {
         const p = _all.find(x => x.ref === ref) || {};
         return [user, terminal, ref, p.name || '', p.ean || '', p.proxium || '', p.family || '', qty, p.pvp || 0];
+      }),
+  ];
+}
+
+function buildEditsRows(editOvr) {
+  // Exporta los artículos modificados con todos sus campos actuales (post-edición)
+  // para que el admin pueda actualizar PROXIUM con los datos corregidos
+  const user = localStorage.getItem('ic_user') || '';
+  return [
+    ['Usuario', 'REF', 'Nombre', 'EAN', 'Familia', 'PROXIUM', 'PVP', 'Coste', 'IVA', 'Campos modificados'],
+    ...Object.entries(editOvr)
+      .map(([ref, ovr]) => {
+        const p = _all.find(x => x.ref === ref) || {};
+        const camposModificados = Object.keys(ovr).join(', ');
+        return [user, ref, p.name || '', p.ean || '', p.family || '', p.proxium || '',
+                p.pvp || 0, p.cost || 0, p.iva || 0, camposModificados];
       }),
   ];
 }
