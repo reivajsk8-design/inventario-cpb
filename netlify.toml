@@ -4,9 +4,8 @@
 [[headers]]
   for = "/db.json.gz"
   [headers.values]
-    Content-Encoding = "gzip"
-    Content-Type     = "application/json"
-    Cache-Control    = "public, max-age=86400"
+    Content-Type  = "application/octet-stream"
+    Cache-Control = "public, max-age=86400"
 
 [[headers]]
   for = "/db-version.json"
