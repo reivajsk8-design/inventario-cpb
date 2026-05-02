@@ -5,16 +5,16 @@ import { openDB, getAllProducts, loadProductsFromNetwork,
 import { mount as mountLista,    unmount as unmountLista    } from './lista.js';
 import { mount as mountConteos,  unmount as unmountConteos  } from './conteos.js';
 import { mount as mountPedidos,  unmount as unmountPedidos  } from './pedidos.js';
-import { mount as mountResumen,  unmount as unmountResumen  } from './resumen.js';
+import { mount as mountResumen,   unmount as unmountResumen   } from './resumen.js';
+import { mount as mountAlbaranes, unmount as unmountAlbaranes } from './albaranes.js';
 import { toast } from './ui.js';
 
 const TABS = {
-  lista:    { mount: mountLista,   unmount: unmountLista,   title: 'Inventario CPB' },
-  conteos:  { mount: mountConteos, unmount: unmountConteos, title: 'Conteos'         },
-  pedidos:  { mount: mountPedidos, unmount: unmountPedidos, title: 'Pedidos'         },
-  albaranes:{ mount: () => renderStub('🚚','Albaranes','Módulo disponible próximamente'),
-              unmount: ()=>{},                               title: 'Albaranes'       },
-  resumen:  { mount: mountResumen, unmount: unmountResumen, title: 'Resumen'         },
+  lista:    { mount: mountLista,    unmount: unmountLista,    title: 'Inventario CPB' },
+  conteos:  { mount: mountConteos,  unmount: unmountConteos,  title: 'Conteos'        },
+  pedidos:  { mount: mountPedidos,  unmount: unmountPedidos,  title: 'Pedidos'        },
+  albaranes:{ mount: mountAlbaranes,unmount: unmountAlbaranes,title: 'Albaranes'      },
+  resumen:  { mount: mountResumen,  unmount: unmountResumen,  title: 'Resumen'        },
 };
 
 let _currentTab = null;

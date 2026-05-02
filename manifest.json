@@ -1,0 +1,19 @@
+{
+  "name": "Inventario CPB",
+  "short_name": "Inv. CPB",
+  "description": "Gestión de inventario, conteos y pedidos",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "theme_color": "#000000",
+  "background_color": "#000000",
+  "icons": [
+    {
+      "src": "./icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

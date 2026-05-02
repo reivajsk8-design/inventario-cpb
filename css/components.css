@@ -108,6 +108,9 @@
   align-items: center;
   gap: 12px;
   border-bottom: 0.5px solid var(--separator);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
 }
 .prod-item:first-child { border-radius: var(--radius-md) var(--radius-md) 0 0; }
 .prod-item:last-child  { border-radius: 0 0 var(--radius-md) var(--radius-md); border-bottom: none; }
