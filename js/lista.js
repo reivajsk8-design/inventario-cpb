@@ -177,7 +177,8 @@ function openEditSheet(ref) {
     renderList();
   };
 
-  document.getElementById('btn-reset-edit')?.onclick = () => {
+  const btnReset = document.getElementById('btn-reset-edit');
+  if (btnReset) btnReset.onclick = () => {
     delete editOvr[ref];
     localStorage.setItem('ie', JSON.stringify(editOvr));
     const orig = _rawAll.find(x => x.ref === ref);
