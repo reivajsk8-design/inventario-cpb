@@ -3,7 +3,7 @@ import { openDB } from './db.js';
 import { toast }  from './ui.js';
 
 const TERMINALS = ['D', 'MSC', 'E'];
-let _photo = null;
+let _photos = [];
 
 // ── IndexedDB helpers ─────────────────────────────────────────────
 function idbReq(req) {
@@ -33,7 +33,8 @@ async function removeAlb(id) {
 async function getPhoto(id) {
   const db  = await openDB();
   const rec = await idbReq(db.transaction('albaran_photos').objectStore('albaran_photos').get(id));
-  return rec?.data ?? null;
+  if (!rec) return [];
+  return Array.isArray(rec.data) ? rec.data : [rec.data]; // backward compat
 }
 
 async function savePhoto(id, data) {
@@ -96,13 +97,13 @@ async function renderLista() {
       const id  = parseInt(el.dataset.alb);
       const db  = await openDB();
       const alb = await idbReq(db.transaction('albaranes').objectStore('albaranes').get(id));
-      _photo    = await getPhoto(id);
+      _photos   = await getPhoto(id);
       if (alb) renderForm(alb);
     });
   });
 
   document.getElementById('fab-alb').addEventListener('click', () => {
-    _photo = null;
+    _photos = [];
     renderForm(null);
   });
 }
@@ -162,27 +163,20 @@ function renderForm(alb) {
         ${TERMINALS.map(t => termBtn(t, t === defTerm)).join('')}
       </div>
 
-      <div class="qty-label" style="margin-bottom:8px">FOTO DEL ALBARÁN</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
-        <label style="background:var(--surface);border:1px solid var(--separator);border-radius:var(--radius-md);padding:18px 10px;text-align:center;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:6px">
-          <span style="font-size:1.5rem">📁</span>
+      <div class="qty-label" style="margin-bottom:8px">PÁGINAS DEL ALBARÁN</div>
+      <div id="photos-list" style="margin-bottom:8px"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">
+        <label style="background:var(--surface);border:1px solid var(--separator);border-radius:var(--radius-md);padding:14px 10px;text-align:center;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:6px">
+          <span style="font-size:1.3rem">📁</span>
           <span style="font-size:0.72rem;color:var(--text2);font-weight:600">Subir foto</span>
           <input type="file" accept="image/*" id="inp-gallery" style="display:none">
         </label>
-        <label style="background:var(--surface);border:1px solid var(--separator);border-radius:var(--radius-md);padding:18px 10px;text-align:center;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:6px">
-          <span style="font-size:1.5rem">📷</span>
+        <label style="background:var(--surface);border:1px solid var(--separator);border-radius:var(--radius-md);padding:14px 10px;text-align:center;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:6px">
+          <span style="font-size:1.3rem">📷</span>
           <span style="font-size:0.72rem;color:var(--text2);font-weight:600">Tomar foto</span>
           <input type="file" accept="image/*" capture="environment" id="inp-camera" style="display:none">
         </label>
       </div>
-      <div id="photo-preview" style="${_photo ? '' : 'display:none'};margin-bottom:6px">
-        ${_photo ? `<img src="${_photo}" style="width:100%;border-radius:var(--radius-md);max-height:240px;object-fit:cover">` : ''}
-      </div>
-      <button id="btn-adjust-photo" style="display:${_photo ? 'block' : 'none'};width:100%;
-        background:rgba(10,132,255,0.1);border-radius:10px;padding:9px;
-        color:var(--accent);font-size:0.78rem;font-weight:700;margin-bottom:10px">
-        ✂️ Ajustar foto (perspectiva)
-      </button>
 
       <div class="qty-label" style="margin-bottom:8px">ESTADO</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">
@@ -243,49 +237,85 @@ function renderForm(alb) {
     });
   });
 
-  // Foto
-  ['inp-gallery', 'inp-camera'].forEach(id => {
-    document.getElementById(id)?.addEventListener('change', e => {
+  // Foto — añadir nueva página
+  ['inp-gallery', 'inp-camera'].forEach(inputId => {
+    document.getElementById(inputId)?.addEventListener('change', e => {
       const file = e.target.files[0];
       if (!file) return;
+      e.target.value = '';
       const reader = new FileReader();
-      reader.onload = ev => {
-        _photo = ev.target.result;
-        showPhotoPreview(_photo);
-      };
+      reader.onload = ev => { _photos.push(ev.target.result); renderPhotoList(); };
       reader.readAsDataURL(file);
     });
   });
 
-  function showPhotoPreview(src) {
-    const prev = document.getElementById('photo-preview');
-    const adj  = document.getElementById('btn-adjust-photo');
-    prev.style.display = '';
-    prev.innerHTML = `<img src="${src}" style="width:100%;border-radius:var(--radius-md);max-height:240px;object-fit:cover">`;
-    if (adj) adj.style.display = 'block';
+  function renderPhotoList() {
+    const container = document.getElementById('photos-list');
+    if (!container) return;
+    if (_photos.length === 0) { container.innerHTML = ''; return; }
+
+    container.innerHTML = _photos.map((src, i) => `
+      <div style="background:var(--surface);border-radius:12px;margin-bottom:8px;overflow:hidden">
+        <img src="${src}" style="width:100%;max-height:160px;object-fit:cover;display:block">
+        <div style="padding:8px 10px;display:flex;align-items:center;gap:6px">
+          <span style="font-size:0.68rem;color:var(--text3);font-weight:700">
+            Pág. ${i+1} / ${_photos.length}
+          </span>
+          <div style="display:flex;gap:4px;margin-left:auto">
+            ${i > 0 ? `<button data-up="${i}" style="padding:5px 9px;border-radius:8px;background:var(--surface2);color:var(--text2);font-size:0.8rem">↑</button>` : ''}
+            ${i < _photos.length-1 ? `<button data-down="${i}" style="padding:5px 9px;border-radius:8px;background:var(--surface2);color:var(--text2);font-size:0.8rem">↓</button>` : ''}
+            <button data-adjust="${i}" style="padding:5px 10px;border-radius:8px;background:rgba(10,132,255,0.12);color:var(--accent);font-size:0.75rem;font-weight:700">✂️</button>
+            <button data-remove="${i}" style="padding:5px 10px;border-radius:8px;background:rgba(255,69,58,0.1);color:var(--red);font-size:0.75rem">🗑</button>
+          </div>
+        </div>
+      </div>`).join('');
+
+    container.querySelectorAll('[data-up]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const i = +btn.dataset.up;
+        [_photos[i-1], _photos[i]] = [_photos[i], _photos[i-1]];
+        renderPhotoList();
+      });
+    });
+    container.querySelectorAll('[data-down]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const i = +btn.dataset.down;
+        [_photos[i], _photos[i+1]] = [_photos[i+1], _photos[i]];
+        renderPhotoList();
+      });
+    });
+    container.querySelectorAll('[data-adjust]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const i = +btn.dataset.adjust;
+        openCropEditor(_photos[i], corrected => {
+          _photos[i] = corrected;
+          renderPhotoList();
+          toast('Foto ajustada ✓', 'green');
+        });
+      });
+    });
+    container.querySelectorAll('[data-remove]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        _photos.splice(+btn.dataset.remove, 1);
+        renderPhotoList();
+      });
+    });
   }
 
-  document.getElementById('btn-adjust-photo')?.addEventListener('click', () => {
-    if (!_photo) return;
-    openCropEditor(_photo, corrected => {
-      _photo = corrected;
-      showPhotoPreview(_photo);
-      toast('Foto ajustada ✓', 'green');
-    });
-  });
+  renderPhotoList();
 
   // Guardar
   document.getElementById('btn-alb-save').addEventListener('click', async () => {
     const saved = await doSave(alb, _terminal, _estado);
     if (saved) {
-      await generatePDF(saved, _photo);
+      await generatePDF(saved, _photos);
       await renderLista();
     }
   });
 
   document.getElementById('btn-alb-pdf')?.addEventListener('click', async () => {
     if (!alb) return;
-    await generatePDF(alb, _photo);
+    await generatePDF(alb, _photos);
   });
 
   document.getElementById('btn-alb-delete')?.addEventListener('click', async () => {
@@ -335,7 +365,7 @@ async function doSave(existing, terminal, estado) {
   const obj = { id, numero, nombre, proveedor, terminal, estado, notas, fecha: new Date().toISOString() };
 
   await saveAlb(obj);
-  if (_photo) await savePhoto(id, _photo);
+  if (_photos.length) await savePhoto(id, _photos);
   localStorage.setItem('ic_user', nombre);
   localStorage.setItem('itr', terminal);
   toast('Albarán guardado', 'green');
@@ -343,7 +373,7 @@ async function doSave(existing, terminal, estado) {
 }
 
 // ── PDF ───────────────────────────────────────────────────────────
-async function generatePDF(alb, photoData) {
+async function generatePDF(alb, photos) {
   try {
     if (!window.jspdf) {
       await new Promise((res, rej) => {
@@ -354,22 +384,29 @@ async function generatePDF(alb, photoData) {
       });
     }
     const { jsPDF } = window.jspdf;
-    const doc = new jsPDF({ unit: 'mm', format: 'a4' });
-    const W   = doc.internal.pageSize.getWidth();
+    const doc  = new jsPDF({ unit: 'mm', format: 'a4' });
+    const W    = doc.internal.pageSize.getWidth();
+    const H    = doc.internal.pageSize.getHeight();
+    const isInc = alb.estado === 'incidencia';
+    const [hR, hG, hB] = isInc ? [255, 69, 58] : [10, 132, 255];
 
-    // Header
-    doc.setFillColor(10, 132, 255);
-    doc.rect(0, 0, W, 28, 'F');
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(18); doc.setFont(undefined, 'bold');
-    doc.text('ALBARÁN CPB', 14, 12);
-    doc.setFontSize(10); doc.setFont(undefined, 'normal');
-    doc.text(`Nº ${alb.numero}`, 14, 21);
-    doc.setFontSize(10);
-    doc.text(new Date(alb.fecha).toLocaleDateString('es'), W - 14, 21, { align: 'right' });
+    const drawHeader = (pageNum, total) => {
+      doc.setFillColor(hR, hG, hB);
+      doc.rect(0, 0, W, 28, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(18); doc.setFont(undefined, 'bold');
+      doc.text('ALBARÁN CPB', 14, 12);
+      doc.setFontSize(10); doc.setFont(undefined, 'normal');
+      doc.text(`Nº ${alb.numero}${isInc ? '  ⚠ INCIDENCIA' : ''}`, 14, 21);
+      doc.text(`${new Date(alb.fecha).toLocaleDateString('es')}  ${pageNum}/${total}`, W - 14, 21, { align: 'right' });
+      doc.setTextColor(0, 0, 0);
+    };
 
-    // Datos
-    doc.setTextColor(0, 0, 0);
+    const photoList = Array.isArray(photos) ? photos.filter(Boolean) : (photos ? [photos] : []);
+    const totalPages = Math.max(1, photoList.length);
+
+    // Pág. 1 — datos del albarán
+    drawHeader(1, totalPages);
     let y = 38;
     const campo = (label, val) => {
       doc.setFont(undefined, 'bold'); doc.setFontSize(8.5);
@@ -381,17 +418,37 @@ async function generatePDF(alb, photoData) {
     campo('Terminal:', `Terminal ${alb.terminal}`);
     campo('Revisado por:', alb.nombre);
     campo('Proveedor:', alb.proveedor || 'No especificado');
-    campo('Estado:', alb.estado === 'conforme' ? '✓ CONFORME' : '⚠ INCIDENCIA');
-    if (alb.notas) { campo('Notas:', alb.notas); }
+    campo('Estado:', isInc ? '⚠ INCIDENCIA' : '✓ CONFORME');
+    if (alb.notas) campo('Notas:', alb.notas);
 
-    // Foto
-    if (photoData) {
+    // Primera foto en la pág. de datos (si existe)
+    if (photoList.length > 0) {
       y += 4;
       try {
-        const img   = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = photoData; });
-        const maxW  = W - 28;
-        const iH    = Math.min(maxW * (img.height / img.width), 160);
-        doc.addImage(photoData, 'JPEG', 14, y, maxW, iH);
+        const src  = photoList[0];
+        const img  = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; });
+        const maxW = W - 28;
+        const maxH = H - y - 14;
+        const ratio = img.naturalHeight / img.naturalWidth;
+        const iH    = Math.min(maxW * ratio, maxH);
+        const iW    = iH / ratio;
+        doc.addImage(src, 'JPEG', 14, y, iW, iH);
+      } catch { /* foto no cargó */ }
+    }
+
+    // Páginas adicionales — una foto por página
+    for (let p = 1; p < photoList.length; p++) {
+      doc.addPage();
+      drawHeader(p + 1, totalPages);
+      try {
+        const src  = photoList[p];
+        const img  = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; });
+        const maxW = W - 28;
+        const maxH = H - 42;
+        const ratio = img.naturalHeight / img.naturalWidth;
+        const iH    = Math.min(maxW * ratio, maxH);
+        const iW    = iH / ratio;
+        doc.addImage(src, 'JPEG', 14, 34, iW, iH);
       } catch { /* foto no cargó */ }
     }
 
@@ -523,8 +580,10 @@ function openCropEditor(imgSrc, onDone) {
 
 function perspectiveCorrect(img, srcPts) {
   // srcPts: [[x,y] x4] TL,TR,BR,BL in natural image coords
-  const outW = Math.round(Math.hypot(srcPts[1][0]-srcPts[0][0], srcPts[1][1]-srcPts[0][1]));
-  const outH = Math.round(Math.hypot(srcPts[3][0]-srcPts[0][0], srcPts[3][1]-srcPts[0][1]));
+  // Forzar proporción A4 portrait (210:297)
+  const detectedW = Math.round(Math.hypot(srcPts[1][0]-srcPts[0][0], srcPts[1][1]-srcPts[0][1]));
+  const outW = detectedW;
+  const outH = Math.round(detectedW * (297 / 210)); // A4 portrait siempre
 
   // Cap output to 1600px max for performance
   const maxDim = 1600;
