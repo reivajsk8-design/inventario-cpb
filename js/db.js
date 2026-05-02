@@ -52,9 +52,14 @@ export async function setStoredDBVersion(v) {
 }
 
 export async function loadProductsFromNetwork() {
-  const res  = await fetch('db.json.gz');
-  const buf  = await res.arrayBuffer();
-  const json = pako.inflate(new Uint8Array(buf), { to: 'string' });
+  const res   = await fetch('db.json.gz');
+  const buf   = await res.arrayBuffer();
+  const bytes = new Uint8Array(buf);
+  // Netlify may transparently decompress gzip before the browser sees it.
+  // Check for gzip magic bytes (0x1f 0x8b); if absent, data is already plain JSON.
+  const json = (bytes[0] === 0x1f && bytes[1] === 0x8b)
+    ? pako.inflate(bytes, { to: 'string' })
+    : new TextDecoder().decode(bytes);
   return JSON.parse(json);
 }
 
