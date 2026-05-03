@@ -332,29 +332,41 @@ function renderForm(alb) {
     container.innerHTML = _lineas.map((ln, i) => {
       const hasInc = ln.inc !== null && ln.inc !== undefined;
       return `
-        <div style="background:var(--surface);border-radius:10px;padding:10px 12px;margin-bottom:6px;
-          border:1px solid ${hasInc ? 'rgba(255,69,58,0.35)' : 'transparent'}">
+        <div style="
+          border-radius:10px;padding:10px 12px;margin-bottom:8px;
+          ${hasInc
+            ? 'background:rgba(255,69,58,0.13);border:2px solid rgba(255,69,58,0.55)'
+            : 'background:var(--surface);border:1px solid transparent'}">
+          ${hasInc ? `
+            <div style="display:flex;align-items:center;gap:5px;margin-bottom:8px">
+              <span style="font-size:0.6rem;font-weight:800;color:var(--red);letter-spacing:0.07em">⚠ INCIDENCIA</span>
+            </div>` : ''}
           <div style="display:flex;gap:6px;align-items:center;margin-bottom:${hasInc ? '8px' : '0'}">
             <input data-ln="${i}" data-field="desc" type="text" placeholder="Descripción del artículo *"
-              style="flex:1;min-width:0;font-size:0.82rem;color:var(--text);background:transparent;
-                border-bottom:1px solid var(--separator);padding:4px 2px"
+              style="flex:1;min-width:0;font-size:0.82rem;
+                color:${hasInc ? 'var(--red)' : 'var(--text)'};background:transparent;
+                border-bottom:1px solid ${hasInc ? 'rgba(255,69,58,0.4)' : 'var(--separator)'};
+                padding:4px 2px;font-weight:${hasInc ? '700' : '400'}"
               value="${(ln.desc || '').replace(/"/g, '&quot;')}">
             <input data-ln="${i}" data-field="qty" type="number" inputmode="numeric" placeholder="Cant."
-              style="width:52px;font-size:0.82rem;color:var(--text);background:transparent;
-                border-bottom:1px solid var(--separator);padding:4px 2px;text-align:center"
+              style="width:52px;font-size:0.82rem;
+                color:${hasInc ? 'var(--red)' : 'var(--text)'};background:transparent;
+                border-bottom:1px solid ${hasInc ? 'rgba(255,69,58,0.4)' : 'var(--separator)'};
+                padding:4px 2px;text-align:center"
               value="${ln.qty != null ? ln.qty : ''}">
             <button data-ln-inc="${i}" style="
               padding:4px 8px;border-radius:8px;font-size:0.8rem;font-weight:700;flex-shrink:0;
-              background:${hasInc ? 'rgba(255,69,58,0.15)' : 'var(--surface2)'};
+              background:${hasInc ? 'rgba(255,69,58,0.25)' : 'var(--surface2)'};
               color:${hasInc ? 'var(--red)' : 'var(--text3)'}">⚠</button>
             <button data-ln-del="${i}" style="
               padding:4px 8px;border-radius:8px;font-size:0.8rem;flex-shrink:0;
-              background:var(--surface2);color:var(--text3)">🗑</button>
+              background:${hasInc ? 'rgba(255,69,58,0.15)' : 'var(--surface2)'};
+              color:${hasInc ? 'rgba(255,69,58,0.7)' : 'var(--text3)'}">🗑</button>
           </div>
           ${hasInc ? `
             <textarea data-ln="${i}" data-field="inc" rows="2"
               style="width:100%;font-size:0.78rem;color:var(--red);
-                background:rgba(255,69,58,0.05);border:1px solid rgba(255,69,58,0.25);
+                background:rgba(255,69,58,0.08);border:1.5px solid rgba(255,69,58,0.4);
                 border-radius:8px;padding:6px 8px;resize:none"
               placeholder="Describe la incidencia…">${ln.inc || ''}</textarea>
           ` : ''}
