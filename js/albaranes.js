@@ -573,8 +573,10 @@ async function generatePDF(alb, photos) {
       } catch { /* foto no cargó */ }
     }
 
-    const fecha = new Date(alb.fecha).toISOString().slice(0, 10);
-    doc.save(`albaran_${alb.numero}_${alb.terminal}_${fecha}.pdf`);
+    const d    = new Date(alb.fecha);
+    const fecha = `${String(d.getDate()).padStart(2,'0')}-${String(d.getMonth()+1).padStart(2,'0')}-${d.getFullYear()}`;
+    const nombre = (alb.nombre || '').replace(/\s+/g, '_');
+    doc.save(`albaran_${alb.terminal}_${nombre}_${fecha}.pdf`);
     toast('PDF generado ✓', 'green');
   } catch (err) {
     toast('Error al generar PDF', 'red');

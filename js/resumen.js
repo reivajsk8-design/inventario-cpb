@@ -77,16 +77,16 @@ function render() {
   `;
 
   document.getElementById('btn-exp-counts').addEventListener('click', () =>
-    ensureTerminal('itr', () => exportExcel('conteos', buildCountsRows(counts))));
+    ensureTerminal('itr', () => exportExcel('conteos', buildCountsRows(counts), localStorage.getItem('itr') || '')));
 
   document.getElementById('btn-exp-orders').addEventListener('click', () =>
-    ensureTerminal('itp', () => exportExcel('pedidos', buildOrdersRows(orders))));
+    ensureTerminal('itp', () => exportExcel('pedidos', buildOrdersRows(orders), localStorage.getItem('itp') || '')));
 
   document.getElementById('btn-exp-edits')?.addEventListener('click', () =>
-    ensureTerminal('itr', () => exportExcel('modificaciones', buildEditsRows(editOvr))));
+    ensureTerminal('itr', () => exportExcel('modificaciones', buildEditsRows(editOvr), localStorage.getItem('itr') || '')));
 
   document.getElementById('btn-exp-new')?.addEventListener('click', () =>
-    ensureTerminal('itr', () => exportExcel('articulos_nuevos', buildNewArtsRows(newArts))));
+    ensureTerminal('itr', () => exportExcel('articulos_nuevos', buildNewArtsRows(newArts), localStorage.getItem('itr') || '')));
 
   document.getElementById('btn-reset').addEventListener('click', () => {
     if (!confirm('¿Borrar todos los conteos y pedidos? Esta acción no se puede deshacer.')) return;
@@ -203,22 +203,24 @@ function ensureTerminal(terminalKey, onConfirmed) {
   });
 }
 
-function exportExcel(name, rows) {
+function exportExcel(name, rows, terminal = '') {
   if (!window.XLSX) {
     const s = document.createElement('script');
     s.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
-    s.onload = () => doExport(name, rows);
+    s.onload = () => doExport(name, rows, terminal);
     document.head.appendChild(s);
   } else {
-    doExport(name, rows);
+    doExport(name, rows, terminal);
   }
 }
 
-function doExport(name, rows) {
+function doExport(name, rows, terminal = '') {
   const wb   = XLSX.utils.book_new();
   const ws   = XLSX.utils.aoa_to_sheet(rows);
   XLSX.utils.book_append_sheet(wb, ws, name);
-  const date = new Date().toISOString().slice(0, 10);
+  const now  = new Date();
+  const date = `${String(now.getDate()).padStart(2,'0')}-${String(now.getMonth()+1).padStart(2,'0')}-${now.getFullYear()}`;
   const user = (localStorage.getItem('ic_user') || 'export').replace(/\s+/g, '_');
-  XLSX.writeFile(wb, `${name}_${user}_${date}.xlsx`);
+  const term = terminal ? `_${terminal}` : '';
+  XLSX.writeFile(wb, `${name}${term}_${user}_${date}.xlsx`);
 }
