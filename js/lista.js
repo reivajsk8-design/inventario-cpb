@@ -72,12 +72,38 @@ function renderList() {
   document.getElementById('btn-more')?.addEventListener('click', () => { _page++; renderList(); });
 }
 
+function parseAlcohol(name) {
+  const m = name?.match(/\b(\d+)\/(\d+)\/(\d+(?:[.,]\d+)?)\b/);
+  if (!m) return null;
+  return { btls: +m[1], cl: +m[2], deg: parseFloat(m[3].replace(',', '.')) };
+}
+
+function alcoholBadges(alc) {
+  if (!alc) return '';
+  return `
+    <div style="display:flex;gap:5px;margin-top:5px;flex-wrap:wrap">
+      <span style="font-size:0.6rem;font-weight:700;padding:2px 8px;border-radius:6px;
+        background:rgba(52,199,89,0.15);color:#30D158;white-space:nowrap">
+        📦 ${alc.btls} bt/caja
+      </span>
+      <span style="font-size:0.6rem;font-weight:700;padding:2px 8px;border-radius:6px;
+        background:rgba(255,159,10,0.15);color:#FF9F0A;white-space:nowrap">
+        🥃 ${alc.cl}cl
+      </span>
+      <span style="font-size:0.6rem;font-weight:700;padding:2px 8px;border-radius:6px;
+        background:rgba(255,69,58,0.15);color:#FF453A;white-space:nowrap">
+        🌡 ${alc.deg}°
+      </span>
+    </div>`;
+}
+
 function prodHTML(p, editOvr) {
   const counts  = getCounts();
   const orders  = getOrders();
   const counted = counts[p.ref]?.qty;
   const ordered = (orders[p.ref] || 0) > 0 ? orders[p.ref] : null;
   const edited  = editOvr[p.ref] && Object.keys(editOvr[p.ref]).length > 0;
+  const alc     = parseAlcohol(p.name);
 
   let badge;
   if (counted != null) {
@@ -100,6 +126,7 @@ function prodHTML(p, editOvr) {
           ${p.family ? `<span class="prod-tag tag-family">${p.family}</span>` : ''}
           ${p.ean ? `<span style="font-size:0.6rem;color:var(--text3)">▪ ${p.ean}</span>` : ''}
         </div>
+        ${alcoholBadges(alc)}
       </div>
       ${badge}
     </div>`;
