@@ -331,7 +331,7 @@ function openNewArticleSheet() {
     <div style="font-size:0.68rem;color:var(--text3);margin-bottom:14px">El código PROXIUM se asigna automáticamente según el prefijo</div>
 
     <div class="qty-label" style="margin-bottom:6px">PREFIJO PROXIUM</div>
-    <div style="overflow-x:auto;margin-bottom:4px;margin-left:-4px;padding-left:4px">
+    <div style="overflow-x:auto;margin-bottom:8px;margin-left:-4px;padding-left:4px">
       <div style="display:flex;gap:6px;width:max-content;padding-bottom:6px">
         ${prefixes.map(pf => `
           <button data-pf="${pf}" style="
@@ -341,6 +341,13 @@ function openNewArticleSheet() {
             ${pf}
           </button>`).join('')}
       </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+      <span style="font-size:0.68rem;color:var(--text3);white-space:nowrap">o escribe:</span>
+      <input id="na-prefix-input" type="text" placeholder="ej. MAQ" maxlength="10"
+        style="flex:1;background:var(--surface2);border-radius:8px;padding:7px 10px;
+               color:var(--text);font-size:0.82rem;font-weight:700;text-transform:uppercase"
+        value="${_prefix}">
     </div>
     <div id="na-proxium-preview" style="font-size:0.75rem;color:var(--accent);font-weight:800;margin-bottom:16px;padding-left:2px">
       → ${nextProxium()}
@@ -379,15 +386,29 @@ function openNewArticleSheet() {
     <button id="na-save" class="add-btn">✦ Crear artículo</button>
   `);
 
+  const refreshChips = () => {
+    document.querySelectorAll('[data-pf]').forEach(b => {
+      const on = b.dataset.pf === _prefix;
+      b.style.background = on ? 'var(--accent)' : 'var(--surface2)';
+      b.style.color      = on ? '#fff' : 'var(--text3)';
+    });
+    document.getElementById('na-proxium-preview').textContent =
+      _prefix ? `→ ${nextProxium()}` : '→ —';
+  };
+
   document.querySelectorAll('[data-pf]').forEach(btn => {
     btn.addEventListener('click', () => {
       _prefix = btn.dataset.pf;
-      document.querySelectorAll('[data-pf]').forEach(b => {
-        b.style.background = b.dataset.pf === _prefix ? 'var(--accent)' : 'var(--surface2)';
-        b.style.color      = b.dataset.pf === _prefix ? '#fff' : 'var(--text3)';
-      });
-      document.getElementById('na-proxium-preview').textContent = `→ ${nextProxium()}`;
+      document.getElementById('na-prefix-input').value = _prefix;
+      refreshChips();
     });
+  });
+
+  document.getElementById('na-prefix-input').addEventListener('input', e => {
+    _prefix = e.target.value.trim().toUpperCase();
+    e.target.value = _prefix;
+    // Deselect chips if text doesn't match any
+    refreshChips();
   });
 
   document.getElementById('na-save').addEventListener('click', () => {
