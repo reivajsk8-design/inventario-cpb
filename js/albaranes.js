@@ -4,6 +4,7 @@ import { toast }  from './ui.js';
 
 const TERMINALS = ['D', 'MSC', 'E'];
 let _photos = [];
+let _lineas = [];
 
 // ── IndexedDB helpers ─────────────────────────────────────────────
 function idbReq(req) {
@@ -104,6 +105,7 @@ async function renderLista() {
 
   document.getElementById('fab-alb').addEventListener('click', () => {
     _photos = [];
+    _lineas = [];
     renderForm(null);
   });
 }
@@ -118,12 +120,19 @@ function estadoBadge(estado) {
 
 function albItemHTML(alb) {
   const fecha = new Date(alb.id).toLocaleDateString('es', { day: '2-digit', month: 'short', year: 'numeric' });
+  const incLineas   = (alb.lineas || []).filter(l => l.inc !== null && l.inc !== undefined).length;
+  const totalLineas = (alb.lineas || []).length;
   return `
     <div class="prod-item" data-alb="${alb.id}" style="align-items:flex-start">
       <div style="flex:1;min-width:0">
         <div class="prod-name">Alb. ${alb.numero || '—'}</div>
         <div class="prod-meta">${alb.terminal} · ${alb.nombre} · ${fecha}</div>
         ${alb.proveedor ? `<div class="prod-meta">${alb.proveedor}</div>` : ''}
+        ${incLineas > 0
+          ? `<div class="prod-meta" style="color:var(--red);margin-top:2px">⚠ ${incLineas} artículo${incLineas > 1 ? 's' : ''} con incidencia</div>`
+          : totalLineas > 0
+            ? `<div class="prod-meta" style="margin-top:2px">${totalLineas} artículo${totalLineas > 1 ? 's' : ''}</div>`
+            : ''}
         ${alb.notas ? `<div class="prod-meta" style="color:var(--amber);margin-top:2px">📝 ${alb.notas}</div>` : ''}
       </div>
       ${estadoBadge(alb.estado)}
@@ -136,6 +145,7 @@ function renderForm(alb) {
   const defNombre = alb?.nombre   || localStorage.getItem('ic_user') || '';
   let _estado     = alb?.estado   ?? 'conforme';
   let _terminal   = defTerm;
+  _lineas = alb?.lineas ? alb.lineas.map(l => ({ ...l })) : [];
 
   document.getElementById('nav-title').textContent = alb ? `Alb. ${alb.numero || '—'}` : 'Nuevo Albarán';
   const leftBtn = document.getElementById('btn-nav-left');
@@ -177,6 +187,15 @@ function renderForm(alb) {
           <input type="file" accept="image/*" capture="environment" id="inp-camera" style="display:none">
         </label>
       </div>
+
+      <div class="qty-label" style="margin-bottom:8px">ARTÍCULOS DEL ALBARÁN</div>
+      <div id="lineas-list" style="margin-bottom:6px"></div>
+      <button id="btn-add-linea" style="
+        width:100%;padding:11px;border-radius:var(--radius-md);
+        background:var(--surface);border:1px dashed var(--separator);
+        color:var(--text3);font-size:0.82rem;font-weight:600;margin-bottom:16px">
+        + Añadir artículo
+      </button>
 
       <div class="qty-label" style="margin-bottom:8px">ESTADO</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">
@@ -304,6 +323,79 @@ function renderForm(alb) {
 
   renderPhotoList();
 
+  // Líneas del albarán
+  function renderLineas() {
+    const container = document.getElementById('lineas-list');
+    if (!container) return;
+    if (_lineas.length === 0) { container.innerHTML = ''; return; }
+
+    container.innerHTML = _lineas.map((ln, i) => {
+      const hasInc = ln.inc !== null && ln.inc !== undefined;
+      return `
+        <div style="background:var(--surface);border-radius:10px;padding:10px 12px;margin-bottom:6px;
+          border:1px solid ${hasInc ? 'rgba(255,69,58,0.35)' : 'transparent'}">
+          <div style="display:flex;gap:6px;align-items:center;margin-bottom:${hasInc ? '8px' : '0'}">
+            <input data-ln="${i}" data-field="desc" type="text" placeholder="Descripción del artículo *"
+              style="flex:1;min-width:0;font-size:0.82rem;color:var(--text);background:transparent;
+                border-bottom:1px solid var(--separator);padding:4px 2px"
+              value="${(ln.desc || '').replace(/"/g, '&quot;')}">
+            <input data-ln="${i}" data-field="qty" type="number" inputmode="numeric" placeholder="Cant."
+              style="width:52px;font-size:0.82rem;color:var(--text);background:transparent;
+                border-bottom:1px solid var(--separator);padding:4px 2px;text-align:center"
+              value="${ln.qty != null ? ln.qty : ''}">
+            <button data-ln-inc="${i}" style="
+              padding:4px 8px;border-radius:8px;font-size:0.8rem;font-weight:700;flex-shrink:0;
+              background:${hasInc ? 'rgba(255,69,58,0.15)' : 'var(--surface2)'};
+              color:${hasInc ? 'var(--red)' : 'var(--text3)'}">⚠</button>
+            <button data-ln-del="${i}" style="
+              padding:4px 8px;border-radius:8px;font-size:0.8rem;flex-shrink:0;
+              background:var(--surface2);color:var(--text3)">🗑</button>
+          </div>
+          ${hasInc ? `
+            <textarea data-ln="${i}" data-field="inc" rows="2"
+              style="width:100%;font-size:0.78rem;color:var(--red);
+                background:rgba(255,69,58,0.05);border:1px solid rgba(255,69,58,0.25);
+                border-radius:8px;padding:6px 8px;resize:none"
+              placeholder="Describe la incidencia…">${ln.inc || ''}</textarea>
+          ` : ''}
+        </div>`;
+    }).join('');
+
+    container.querySelectorAll('input[data-ln], textarea[data-ln]').forEach(inp => {
+      inp.addEventListener('input', () => {
+        const i = +inp.dataset.ln;
+        const field = inp.dataset.field;
+        _lineas[i][field] = field === 'qty' ? (inp.value ? +inp.value : null) : inp.value;
+      });
+    });
+
+    container.querySelectorAll('[data-ln-inc]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const i = +btn.dataset.lnInc;
+        _lineas[i].inc = (_lineas[i].inc !== null && _lineas[i].inc !== undefined) ? null : '';
+        renderLineas();
+      });
+    });
+
+    container.querySelectorAll('[data-ln-del]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        _lineas.splice(+btn.dataset.lnDel, 1);
+        renderLineas();
+      });
+    });
+  }
+
+  renderLineas();
+
+  document.getElementById('btn-add-linea').addEventListener('click', () => {
+    _lineas.push({ desc: '', qty: null, inc: null });
+    renderLineas();
+    setTimeout(() => {
+      const inputs = document.querySelectorAll('#lineas-list input[data-field="desc"]');
+      if (inputs.length) inputs[inputs.length - 1].focus();
+    }, 50);
+  });
+
   // Guardar
   document.getElementById('btn-alb-save').addEventListener('click', async () => {
     const saved = await doSave(alb, _terminal, _estado);
@@ -362,7 +454,8 @@ async function doSave(existing, terminal, estado) {
   if (!nombre) { toast('Introduce tu nombre', 'red'); return null; }
 
   const id  = existing?.id || Date.now();
-  const obj = { id, numero, nombre, proveedor, terminal, estado, notas, fecha: new Date().toISOString() };
+  const lineas = _lineas.filter(l => l.desc?.trim());
+  const obj = { id, numero, nombre, proveedor, terminal, estado, notas, lineas, fecha: new Date().toISOString() };
 
   await saveAlb(obj);
   if (_photos.length) await savePhoto(id, _photos);
@@ -420,6 +513,34 @@ async function generatePDF(alb, photos) {
     campo('Proveedor:', alb.proveedor || 'No especificado');
     campo('Estado:', isInc ? '⚠ INCIDENCIA' : '✓ CONFORME');
     if (alb.notas) campo('Notas:', alb.notas);
+
+    // Líneas del albarán
+    const lineas = (alb.lineas || []).filter(l => l.desc?.trim());
+    if (lineas.length) {
+      y += 3;
+      doc.setFontSize(8.5); doc.setFont(undefined, 'bold'); doc.setTextColor(0, 0, 0);
+      doc.text('ARTÍCULOS DEL ALBARÁN:', 14, y); y += 5;
+      doc.setDrawColor(150, 150, 150); doc.setLineWidth(0.3);
+      doc.line(14, y, W - 14, y); y += 4;
+
+      lineas.forEach(ln => {
+        if (y > H - 40) return;
+        const hasInc = ln.inc !== null && ln.inc !== undefined;
+        doc.setTextColor(hasInc ? 255 : 0, hasInc ? 69 : 0, hasInc ? 58 : 0);
+        doc.setFont(undefined, hasInc ? 'bold' : 'normal');
+        doc.setFontSize(8);
+        const qty = ln.qty != null ? `  ×${ln.qty}` : '';
+        doc.text(`${hasInc ? '⚠ ' : '• '}${ln.desc}${qty}`, 18, y, { maxWidth: W - 32 });
+        y += 5;
+        if (hasInc && ln.inc) {
+          doc.setFont(undefined, 'normal'); doc.setFontSize(7.5);
+          doc.text(`    ${ln.inc}`, 18, y, { maxWidth: W - 32 });
+          y += 4.5;
+        }
+      });
+      doc.setTextColor(0, 0, 0);
+      y += 4;
+    }
 
     // Primera foto en la pág. de datos (si existe)
     if (photoList.length > 0) {
