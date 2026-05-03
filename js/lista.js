@@ -17,6 +17,10 @@ const EDIT_FIELDS = [
 const QUICK_C    = [1, 5, 10, 20];
 const QUICK_P    = [6, 12, 24, 48];
 
+function getNewArticles() {
+  return Object.values(JSON.parse(localStorage.getItem('ia') || '{}'));
+}
+
 let _all = [], _filtered = [], _page = 0, _filterBar = null;
 let _rawAll = [];
 
@@ -28,7 +32,8 @@ function saveOrders(o){ localStorage.setItem('io', JSON.stringify(o)); }
 export async function mount() {
   _rawAll = await getAllProducts();
   const editOvr = JSON.parse(localStorage.getItem('ie') || '{}');
-  _all = _rawAll.map(p => editOvr[p.ref] ? { ...p, ...editOvr[p.ref] } : p);
+  const newArts = getNewArticles();
+  _all = [..._rawAll, ...newArts].map(p => editOvr[p.ref] ? { ...p, ...editOvr[p.ref] } : p);
 
   const families = await getFamilies();
   _filterBar = mountFilterBar(families, ({ query, filterType, families: fams }) => {
@@ -45,13 +50,21 @@ export function unmount() {
   if (_filterBar) _filterBar.hide();
 }
 
+const _FAB = `<button id="fab-new-art" style="
+  position:fixed;bottom:calc(72px + env(safe-area-inset-bottom));right:20px;
+  width:56px;height:56px;border-radius:50%;
+  background:var(--accent);color:#fff;font-size:1.8rem;font-weight:300;
+  box-shadow:0 4px 20px rgba(10,132,255,0.4);
+  display:flex;align-items:center;justify-content:center;z-index:20">+</button>`;
+
 function renderList() {
   const main  = document.getElementById('main');
   const items = _filtered.slice(0, (_page + 1) * PAGE);
   const more  = _filtered.length > items.length;
 
   if (items.length === 0) {
-    main.innerHTML = `<div class="empty-state"><div class="icon">🔍</div><p>Sin resultados</p></div>`;
+    main.innerHTML = `<div class="empty-state"><div class="icon">🔍</div><p>Sin resultados</p></div>${_FAB}`;
+    document.getElementById('fab-new-art').addEventListener('click', openNewArticleSheet);
     return;
   }
 
@@ -62,7 +75,7 @@ function renderList() {
            Ver más (${_filtered.length - items.length})
          </button>`
       : ''
-  }</div>`;
+  }</div>${_FAB}`;
 
   main.querySelectorAll('.prod-item').forEach(el => {
     el.addEventListener('click',       () => openProductSheet(el.dataset.ref));
@@ -70,6 +83,7 @@ function renderList() {
   });
 
   document.getElementById('btn-more')?.addEventListener('click', () => { _page++; renderList(); });
+  document.getElementById('fab-new-art').addEventListener('click', openNewArticleSheet);
 }
 
 function parseAlcohol(name) {
@@ -104,6 +118,7 @@ function prodHTML(p, editOvr) {
   const ordered = (orders[p.ref] || 0) > 0 ? orders[p.ref] : null;
   const edited  = editOvr[p.ref] && Object.keys(editOvr[p.ref]).length > 0;
   const alc     = parseAlcohol(p.name);
+  const isNew   = !!p.isNew;
 
   let badge;
   if (counted != null) {
@@ -118,8 +133,10 @@ function prodHTML(p, editOvr) {
     <div class="prod-item" data-ref="${p.ref}">
       <div style="flex:1;min-width:0">
         <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-bottom:4px">
-          <span class="prod-tag ${edited ? 'tag-edited' : 'tag-ref'}">${p.ref}</span>
-          ${p.proxium ? `<span class="prod-tag tag-proxium">${p.proxium}</span>` : ''}
+          ${isNew
+            ? `<span class="prod-tag" style="background:rgba(255,159,10,0.2);color:#FF9F0A">✦ ${p.ref}</span>`
+            : `<span class="prod-tag ${edited ? 'tag-edited' : 'tag-ref'}">${p.ref}</span>`}
+          ${p.proxium && p.proxium !== p.ref ? `<span class="prod-tag tag-proxium">${p.proxium}</span>` : ''}
           <div class="prod-name" style="flex:1;min-width:80px">${p.name}</div>
         </div>
         <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
@@ -293,4 +310,113 @@ function openEditSheet(ref) {
     toast('Modificaciones eliminadas', 'amber');
     renderList();
   };
+}
+
+// ── Crear artículo nuevo ──────────────────────────────────────────────
+function openNewArticleSheet() {
+  const reProx = /^([A-Za-z]+)-(\d+)$/;
+  const prefixMap = new Map();
+  for (const p of _all) {
+    const m = (p.proxium || '').match(reProx);
+    if (m) prefixMap.set(m[1], Math.max(prefixMap.get(m[1]) || 0, +m[2]));
+  }
+  const prefixes = [...prefixMap.keys()].sort();
+  if (prefixes.length === 0) { toast('No hay prefijos PROXIUM en la BD', 'red'); return; }
+
+  let _prefix = prefixes[0];
+  const nextProxium = () => `${_prefix}-${(prefixMap.get(_prefix) || 0) + 1}`;
+
+  openSheet(`
+    <div style="font-size:0.95rem;font-weight:700;color:var(--text);margin-bottom:4px">Nuevo artículo</div>
+    <div style="font-size:0.68rem;color:var(--text3);margin-bottom:14px">El código PROXIUM se asigna automáticamente según el prefijo</div>
+
+    <div class="qty-label" style="margin-bottom:6px">PREFIJO PROXIUM</div>
+    <div style="overflow-x:auto;margin-bottom:4px;margin-left:-4px;padding-left:4px">
+      <div style="display:flex;gap:6px;width:max-content;padding-bottom:6px">
+        ${prefixes.map(pf => `
+          <button data-pf="${pf}" style="
+            padding:6px 13px;border-radius:20px;font-size:0.72rem;font-weight:700;white-space:nowrap;
+            background:${pf === _prefix ? 'var(--accent)' : 'var(--surface2)'};
+            color:${pf === _prefix ? '#fff' : 'var(--text3)'}">
+            ${pf}
+          </button>`).join('')}
+      </div>
+    </div>
+    <div id="na-proxium-preview" style="font-size:0.75rem;color:var(--accent);font-weight:800;margin-bottom:16px;padding-left:2px">
+      → ${nextProxium()}
+    </div>
+
+    <div class="qty-label" style="margin-bottom:6px">NOMBRE *</div>
+    <input id="na-name" type="text" placeholder="Nombre del artículo"
+      style="width:100%;background:var(--surface2);border-radius:10px;padding:10px 12px;
+             color:var(--text);font-size:0.85rem;margin-bottom:14px">
+
+    <div class="qty-label" style="margin-bottom:6px">EAN (opcional)</div>
+    <input id="na-ean" type="text" inputmode="numeric" placeholder="Código de barras"
+      style="width:100%;background:var(--surface2);border-radius:10px;padding:10px 12px;
+             color:var(--text);font-size:0.85rem;margin-bottom:14px">
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px">
+      <div>
+        <div class="qty-label" style="margin-bottom:6px">PVP (€)</div>
+        <input id="na-pvp" type="number" inputmode="decimal" step="0.01" placeholder="0.00"
+          style="width:100%;background:var(--surface2);border-radius:10px;padding:10px 12px;
+                 color:var(--text);font-size:0.85rem">
+      </div>
+      <div>
+        <div class="qty-label" style="margin-bottom:6px">IVA</div>
+        <select id="na-iva"
+          style="width:100%;background:var(--surface2);border-radius:10px;padding:10px 12px;
+                 color:var(--text);font-size:0.85rem">
+          <option value="21">21%</option>
+          <option value="10">10%</option>
+          <option value="4">4%</option>
+          <option value="0">0%</option>
+        </select>
+      </div>
+    </div>
+
+    <button id="na-save" class="add-btn">✦ Crear artículo</button>
+  `);
+
+  document.querySelectorAll('[data-pf]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      _prefix = btn.dataset.pf;
+      document.querySelectorAll('[data-pf]').forEach(b => {
+        b.style.background = b.dataset.pf === _prefix ? 'var(--accent)' : 'var(--surface2)';
+        b.style.color      = b.dataset.pf === _prefix ? '#fff' : 'var(--text3)';
+      });
+      document.getElementById('na-proxium-preview').textContent = `→ ${nextProxium()}`;
+    });
+  });
+
+  document.getElementById('na-save').addEventListener('click', () => {
+    const name = document.getElementById('na-name').value.trim();
+    const ean  = document.getElementById('na-ean').value.trim();
+    const pvp  = parseFloat(document.getElementById('na-pvp').value) || 0;
+    const iva  = parseInt(document.getElementById('na-iva').value) || 21;
+
+    if (!name) { toast('El nombre es obligatorio', 'red'); return; }
+
+    const proxium = nextProxium();
+
+    if (_all.find(p => p.proxium === proxium)) {
+      toast('Ya existe un artículo con ese código PROXIUM', 'red');
+      document.getElementById('na-proxium-preview').textContent = `→ ${nextProxium()}`;
+      return;
+    }
+
+    const newArt = { ref: proxium, proxium, name, family: _prefix, ean, pvp, cost: 0, iva, isNew: true };
+
+    const stored = JSON.parse(localStorage.getItem('ia') || '{}');
+    stored[proxium] = newArt;
+    localStorage.setItem('ia', JSON.stringify(stored));
+
+    prefixMap.set(_prefix, (prefixMap.get(_prefix) || 0) + 1);
+    _all.push(newArt);
+    _filtered = [..._all];
+    closeSheet();
+    toast(`${proxium} creado ✓`, 'green');
+    renderList();
+  });
 }

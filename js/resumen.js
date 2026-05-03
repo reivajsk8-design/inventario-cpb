@@ -7,7 +7,8 @@ let _all = [], _rawAll = [];
 export async function mount() {
   _rawAll = await getAllProducts();
   const editOvr = JSON.parse(localStorage.getItem('ie') || '{}');
-  _all = _rawAll.map(p => editOvr[p.ref] ? { ...p, ...editOvr[p.ref] } : p);
+  const newArts = Object.values(JSON.parse(localStorage.getItem('ia') || '{}'));
+  _all = [..._rawAll, ...newArts].map(p => editOvr[p.ref] ? { ...p, ...editOvr[p.ref] } : p);
   render();
 }
 
@@ -17,12 +18,14 @@ function render() {
   const counts  = JSON.parse(localStorage.getItem('ic') || '{}');
   const orders  = JSON.parse(localStorage.getItem('io') || '{}');
   const editOvr = JSON.parse(localStorage.getItem('ie') || '{}');
+  const newArts = Object.values(JSON.parse(localStorage.getItem('ia') || '{}'));
 
   const countRefs  = Object.keys(counts).filter(r => counts[r]?.qty > 0);
   const countUnits = countRefs.reduce((a, r) => a + (counts[r]?.qty || 0), 0);
   const orderRefs  = Object.keys(orders).filter(r => orders[r] > 0);
   const orderUnits = orderRefs.reduce((a, r) => a + (orders[r] || 0), 0);
   const editCount  = Object.keys(editOvr).length;
+  const newCount   = newArts.length;
 
   document.getElementById('main').innerHTML = `
     <div class="stat-grid">
@@ -46,6 +49,12 @@ function render() {
         <div class="stat-value">${_all.length.toLocaleString('es')}</div>
         <div class="stat-sub">productos en BD</div>
       </div>
+      ${newCount > 0 ? `
+      <div class="stat-card" style="grid-column:1/-1">
+        <div class="stat-label">Artículos nuevos creados</div>
+        <div class="stat-value" style="color:var(--accent)">${newCount}</div>
+        <div class="stat-sub">solo en este dispositivo — pendiente de subir a BD</div>
+      </div>` : ''}
     </div>
 
     <button class="export-btn" id="btn-exp-counts">⬇ Exportar inventario (Excel)</button>
@@ -55,6 +64,11 @@ function render() {
     <button class="export-btn" id="btn-exp-edits"
       style="background:rgba(255,159,10,0.15);color:var(--amber);border:1px solid rgba(255,159,10,0.3)">
       ✏️ Exportar modificaciones (${editCount} artículos)
+    </button>` : ''}
+    ${newCount > 0 ? `
+    <button class="export-btn" id="btn-exp-new"
+      style="background:rgba(10,132,255,0.08);color:var(--accent);border:1px solid rgba(10,132,255,0.2)">
+      ✦ Exportar artículos nuevos (${newCount})
     </button>` : ''}
     <button class="export-btn" id="btn-reset"
       style="background:rgba(255,69,58,0.12);color:var(--red);margin-top:20px">
@@ -70,6 +84,9 @@ function render() {
 
   document.getElementById('btn-exp-edits')?.addEventListener('click', () =>
     ensureTerminal('itr', () => exportExcel('modificaciones', buildEditsRows(editOvr))));
+
+  document.getElementById('btn-exp-new')?.addEventListener('click', () =>
+    ensureTerminal('itr', () => exportExcel('articulos_nuevos', buildNewArtsRows(newArts))));
 
   document.getElementById('btn-reset').addEventListener('click', () => {
     if (!confirm('¿Borrar todos los conteos y pedidos? Esta acción no se puede deshacer.')) return;
@@ -105,6 +122,15 @@ function buildOrdersRows(orders) {
         const p = _all.find(x => x.ref === ref) || {};
         return [user, terminal, ref, p.name || '', p.ean || '', p.proxium || '', p.family || '', qty, p.pvp || 0];
       }),
+  ];
+}
+
+function buildNewArtsRows(newArts) {
+  const user     = localStorage.getItem('ic_user') || '';
+  const terminal = localStorage.getItem('itr') || '';
+  return [
+    ['Usuario', 'Terminal', 'PROXIUM', 'Nombre', 'EAN', 'Familia', 'PVP', 'IVA (%)'],
+    ...newArts.map(p => [user, terminal, p.proxium, p.name, p.ean || '', p.family || '', p.pvp || 0, p.iva ?? 21]),
   ];
 }
 
