@@ -153,19 +153,16 @@ function buildEditsRows(editOvr) {
 const TERMINALS = ['D', 'MSC', 'E'];
 
 function ensureTerminal(terminalKey, onConfirmed) {
-  const savedTerm    = localStorage.getItem(terminalKey) || '';
-  const familiaSet   = localStorage.getItem('ic_familia') !== null;
+  const savedTerm = localStorage.getItem(terminalKey) || '';
 
-  if (savedTerm && familiaSet) { onConfirmed(); return; }
+  if (savedTerm) { onConfirmed(); return; }
 
-  let _term = savedTerm;
+  let _term = '';
 
   openSheet(`
-    <div style="font-size:0.95rem;font-weight:700;color:var(--text);margin-bottom:6px">Terminal y sección</div>
-    <div style="font-size:0.7rem;color:var(--text3);margin-bottom:16px">Se guardarán para los próximos exports.</div>
+    <div style="font-size:0.95rem;font-weight:700;color:var(--text);margin-bottom:6px">Selecciona terminal</div>
+    <div style="font-size:0.7rem;color:var(--text3);margin-bottom:16px">Se guardará para los próximos exports.</div>
 
-    ${!savedTerm ? `
-    <div style="font-size:0.62rem;color:var(--text3);font-weight:700;letter-spacing:0.05em;margin-bottom:8px">TERMINAL</div>
     <div style="display:flex;gap:8px;margin-bottom:18px">
       ${TERMINALS.map(t => `
         <button data-term="${t}" style="
@@ -173,17 +170,9 @@ function ensureTerminal(terminalKey, onConfirmed) {
           background:var(--surface2);color:var(--text3)">
           ${t}
         </button>`).join('')}
-    </div>` : ''}
+    </div>
 
-    <div style="font-size:0.62rem;color:var(--text3);font-weight:700;letter-spacing:0.05em;margin-bottom:8px">TU SECCIÓN / FAMILIA</div>
-    <input id="exp-familia" type="text" inputmode="text" autocomplete="off"
-      placeholder="Ej. BODEGA, AGYBEX, VINOS…"
-      style="width:100%;background:var(--surface2);border-radius:10px;
-        padding:13px 14px;font-size:0.88rem;color:var(--text);
-        text-transform:uppercase;margin-bottom:18px"
-      value="${localStorage.getItem('ic_familia') || ''}">
-
-    <button id="exp-confirm" class="add-btn" ${!savedTerm ? 'style="opacity:0.4"' : ''} ${!savedTerm ? 'disabled' : ''}>
+    <button id="exp-confirm" class="add-btn" style="opacity:0.4" disabled>
       Exportar →
     </button>
   `);
@@ -204,11 +193,19 @@ function ensureTerminal(terminalKey, onConfirmed) {
   document.getElementById('exp-confirm').addEventListener('click', () => {
     if (!_term) return;
     localStorage.setItem(terminalKey, _term);
-    const fam = document.getElementById('exp-familia').value.trim().toUpperCase();
-    localStorage.setItem('ic_familia', fam);
     closeSheet();
     onConfirmed();
   });
+}
+
+function detectFamilia(rows) {
+  const header = rows[0] || [];
+  const idx    = header.indexOf('Familia');
+  if (idx < 0) return '';
+  const fams = new Set(rows.slice(1).map(r => r[idx]).filter(Boolean));
+  if (fams.size === 1) return [...fams][0];
+  if (fams.size  > 1) return 'VARIOS';
+  return '';
 }
 
 function exportExcel(name, rows, terminal = '') {
@@ -223,13 +220,13 @@ function exportExcel(name, rows, terminal = '') {
 }
 
 function doExport(name, rows, terminal = '') {
-  const wb      = XLSX.utils.book_new();
-  const ws      = XLSX.utils.aoa_to_sheet(rows);
+  const wb   = XLSX.utils.book_new();
+  const ws   = XLSX.utils.aoa_to_sheet(rows);
   XLSX.utils.book_append_sheet(wb, ws, name);
   const now     = new Date();
   const date    = `${String(now.getDate()).padStart(2,'0')}-${String(now.getMonth()+1).padStart(2,'0')}-${now.getFullYear()}`;
-  const user    = (localStorage.getItem('ic_user')    || 'export').replace(/\s+/g, '_');
-  const familia = (localStorage.getItem('ic_familia') || '').replace(/\s+/g, '_');
+  const user    = (localStorage.getItem('ic_user') || 'export').replace(/\s+/g, '_');
+  const familia = detectFamilia(rows).replace(/\s+/g, '_');
   const term    = terminal ? `_${terminal}` : '';
   const fam     = familia  ? `_${familia}`  : '';
   XLSX.writeFile(wb, `${name}${term}${fam}_${user}_${date}.xlsx`);
