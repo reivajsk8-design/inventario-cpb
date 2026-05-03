@@ -6,6 +6,12 @@ const TERMINALS = ['D', 'MSC', 'E'];
 let _photos = [];
 let _lineas = [];
 
+const TERM_COLORS = {
+  D:   { bg: '#FF6B00', bgOff: 'rgba(255,107,0,0.1)',   color: '#fff',    colorOff: 'rgba(255,107,0,0.8)'   },
+  MSC: { bg: '#FFD60A', bgOff: 'rgba(255,214,10,0.1)',  color: '#1a1a1a', colorOff: 'rgba(255,214,10,0.85)' },
+  E:   { bg: '#0A84FF', bgOff: 'rgba(10,132,255,0.1)',  color: '#fff',    colorOff: 'rgba(10,132,255,0.8)'  },
+};
+
 // ── IndexedDB helpers ─────────────────────────────────────────────
 function idbReq(req) {
   return new Promise((res, rej) => {
@@ -237,9 +243,9 @@ function renderForm(alb) {
       _terminal = btn.dataset.term;
       document.querySelectorAll('[data-term]').forEach(b => {
         const on = b.dataset.term === _terminal;
-        b.style.borderColor = on ? 'var(--accent)' : 'var(--separator)';
-        b.style.background  = on ? 'rgba(10,132,255,0.1)' : 'var(--surface)';
-        b.style.color       = on ? 'var(--accent)' : 'var(--text3)';
+        const c  = TERM_COLORS[b.dataset.term];
+        b.style.background = on ? c.bg    : c.bgOff;
+        b.style.color      = on ? c.color : c.colorOff;
       });
     });
   });
@@ -435,11 +441,11 @@ function renderForm(alb) {
 }
 
 function termBtn(t, active) {
+  const c = TERM_COLORS[t];
   return `<button data-term="${t}" style="
     flex:1;padding:12px;border-radius:var(--radius-md);font-size:0.85rem;font-weight:800;
-    border:2px solid ${active ? 'var(--accent)' : 'var(--separator)'};
-    background:${active ? 'rgba(10,132,255,0.1)' : 'var(--surface)'};
-    color:${active ? 'var(--accent)' : 'var(--text3)'}">
+    background:${active ? c.bg : c.bgOff};
+    color:${active ? c.color : c.colorOff}">
     • Term. ${t}
   </button>`;
 }

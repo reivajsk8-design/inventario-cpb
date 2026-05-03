@@ -8,6 +8,12 @@ const QUICK_QTYS = [6, 12, 24, 48];
 const TERMINALS  = ['D', 'MSC', 'E'];
 const PAGE = 50;
 
+const TERM_COLORS = {
+  D:   { bg: '#FF6B00', bgOff: 'rgba(255,107,0,0.12)',   color: '#fff',    colorOff: 'rgba(255,107,0,0.8)'   },
+  MSC: { bg: '#FFD60A', bgOff: 'rgba(255,214,10,0.12)',  color: '#1a1a1a', colorOff: 'rgba(255,214,10,0.85)' },
+  E:   { bg: '#0A84FF', bgOff: 'rgba(10,132,255,0.12)',  color: '#fff',    colorOff: 'rgba(10,132,255,0.8)'  },
+};
+
 let _all = [], _page = 0, _filterBar = null;
 let _query = '', _filterType = 'all', _activeFamilies = [];
 
@@ -150,19 +156,18 @@ function renderList() {
   const totalUnits = pedidos.reduce((s, p) => s + (orders[p.ref] || 0), 0);
 
   main.innerHTML = `
-    <div style="padding:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-      <div style="display:flex;gap:4px">
-        ${TERMINALS.map(t => `
-          <button data-term="${t}" style="
-            padding:6px 14px;border-radius:20px;font-size:0.72rem;font-weight:700;
-            background:${t === terminal ? 'var(--accent)' : 'var(--surface2)'};
-            color:${t === terminal ? '#fff' : 'var(--text3)'}">
-            ${t}
-          </button>`).join('')}
-      </div>
-      <div style="margin-left:auto;font-size:0.72rem;color:var(--text3)">
-        <strong style="color:var(--accent)">${pedidos.length} refs</strong> · ${totalUnits} uds
-      </div>
+    <div style="padding:12px 12px 6px;display:flex;gap:8px">
+      ${TERMINALS.map(t => {
+        const c = TERM_COLORS[t]; const on = t === terminal;
+        return `<button data-term="${t}" style="
+          flex:1;padding:11px 4px;border-radius:12px;font-size:0.82rem;font-weight:800;
+          background:${on ? c.bg : c.bgOff};color:${on ? c.color : c.colorOff}">
+          Term. ${t}
+        </button>`;
+      }).join('')}
+    </div>
+    <div style="padding:0 12px 4px;text-align:right;font-size:0.72rem;color:var(--text3)">
+      <strong style="color:var(--accent)">${pedidos.length} refs</strong> · ${totalUnits} uds
     </div>
     <div style="padding:0 12px 4px;font-size:0.65rem;color:var(--text3)">
       📡 Escanea para añadir · toca para editar cantidad
