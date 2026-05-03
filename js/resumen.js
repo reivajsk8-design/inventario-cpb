@@ -115,12 +115,12 @@ function buildOrdersRows(orders) {
   const user     = localStorage.getItem('ic_user') || '';
   const terminal = localStorage.getItem('itp') || '';
   return [
-    ['Usuario', 'Terminal', 'REF', 'Nombre', 'EAN', 'PROXIUM', 'Familia', 'Cantidad pedida', 'PVP'],
+    ['Usuario', 'Terminal', 'REF', 'Nombre', 'EAN', 'PROXIUM', 'Familia', 'Cantidad pedida', 'Coste'],
     ...Object.entries(orders)
       .filter(([, qty]) => qty > 0)
       .map(([ref, qty]) => {
         const p = _all.find(x => x.ref === ref) || {};
-        return [user, terminal, ref, p.name || '', p.ean || '', p.proxium || '', p.family || '', qty, p.pvp || 0];
+        return [user, terminal, ref, p.name || '', p.ean || '', p.proxium || '', p.family || '', qty, p.cost || 0];
       }),
   ];
 }
@@ -129,8 +129,8 @@ function buildNewArtsRows(newArts) {
   const user     = localStorage.getItem('ic_user') || '';
   const terminal = localStorage.getItem('itr') || '';
   return [
-    ['Usuario', 'Terminal', 'PROXIUM', 'Nombre', 'EAN', 'Familia', 'PVP', 'IVA (%)'],
-    ...newArts.map(p => [user, terminal, p.proxium, p.name, p.ean || '', p.family || '', p.pvp || 0, p.iva ?? 21]),
+    ['Usuario', 'Terminal', 'PROXIUM', 'Nombre', 'EAN', 'Familia', 'Ref. Proveedor', 'PVP', 'Coste', 'IVA (%)'],
+    ...newArts.map(p => [user, terminal, p.proxium, p.name, p.ean || '', p.family || '', p.provRef || '', p.pvp || 0, p.cost || 0, p.iva ?? 21]),
   ];
 }
 

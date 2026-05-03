@@ -363,10 +363,21 @@ function openNewArticleSheet() {
       style="width:100%;background:var(--surface2);border-radius:10px;padding:10px 12px;
              color:var(--text);font-size:0.85rem;margin-bottom:14px">
 
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px">
+    <div class="qty-label" style="margin-bottom:6px">REF. PROVEEDOR (opcional)</div>
+    <input id="na-proxium-prov" type="text" placeholder="Referencia del proveedor"
+      style="width:100%;background:var(--surface2);border-radius:10px;padding:10px 12px;
+             color:var(--text);font-size:0.85rem;margin-bottom:14px">
+
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:20px">
       <div>
         <div class="qty-label" style="margin-bottom:6px">PVP (€)</div>
         <input id="na-pvp" type="number" inputmode="decimal" step="0.01" placeholder="0.00"
+          style="width:100%;background:var(--surface2);border-radius:10px;padding:10px 12px;
+                 color:var(--text);font-size:0.85rem">
+      </div>
+      <div>
+        <div class="qty-label" style="margin-bottom:6px">Coste (€)</div>
+        <input id="na-cost" type="number" inputmode="decimal" step="0.01" placeholder="0.00"
           style="width:100%;background:var(--surface2);border-radius:10px;padding:10px 12px;
                  color:var(--text);font-size:0.85rem">
       </div>
@@ -412,10 +423,12 @@ function openNewArticleSheet() {
   });
 
   document.getElementById('na-save').addEventListener('click', () => {
-    const name = document.getElementById('na-name').value.trim();
-    const ean  = document.getElementById('na-ean').value.trim();
-    const pvp  = parseFloat(document.getElementById('na-pvp').value) || 0;
-    const iva  = parseInt(document.getElementById('na-iva').value) || 21;
+    const name     = document.getElementById('na-name').value.trim();
+    const ean      = document.getElementById('na-ean').value.trim();
+    const provRef  = document.getElementById('na-proxium-prov').value.trim();
+    const pvp      = parseFloat(document.getElementById('na-pvp').value) || 0;
+    const cost     = parseFloat(document.getElementById('na-cost').value) || 0;
+    const iva      = parseInt(document.getElementById('na-iva').value) || 21;
 
     if (!name) { toast('El nombre es obligatorio', 'red'); return; }
 
@@ -427,7 +440,7 @@ function openNewArticleSheet() {
       return;
     }
 
-    const newArt = { ref: proxium, proxium, name, family: _prefix, ean, pvp, cost: 0, iva, isNew: true };
+    const newArt = { ref: proxium, proxium, name, family: _prefix, ean, provRef, pvp, cost, iva, isNew: true };
 
     const stored = JSON.parse(localStorage.getItem('ia') || '{}');
     stored[proxium] = newArt;
