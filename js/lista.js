@@ -86,6 +86,39 @@ function renderList() {
   document.getElementById('fab-new-art').addEventListener('click', openNewArticleSheet);
 }
 
+const PERF_TYPE = {
+  EDP: { bg: 'rgba(191,90,242,0.18)',  color: '#BF5AF2', emoji: '🌸' },
+  EDT: { bg: 'rgba(100,210,255,0.18)', color: '#64D2FF', emoji: '💨' },
+  EDC: { bg: 'rgba(90,200,250,0.18)',  color: '#5AC8FA', emoji: '💦' },
+  ECS: { bg: 'rgba(90,200,250,0.18)',  color: '#5AC8FA', emoji: '💦' },
+  SET: { bg: 'rgba(255,214,10,0.18)',  color: '#FFD60A', emoji: '🎁' },
+};
+
+function parsePerfume(name) {
+  if (!name) return null;
+  const ml   = name.match(/\b(\d+)\s*ML\b/i);
+  const tipo = name.match(/\b(EDP|EDT|EDC|ECS|SET)\b/i);
+  if (!ml && !tipo) return null;
+  return { ml: ml ? +ml[1] : null, tipo: tipo ? tipo[1].toUpperCase() : null };
+}
+
+function perfumeBadges(perf) {
+  if (!perf) return '';
+  const parts = [];
+  if (perf.tipo) {
+    const c = PERF_TYPE[perf.tipo] || { bg: 'rgba(191,90,242,0.18)', color: '#BF5AF2', emoji: '✨' };
+    parts.push(`<span style="font-size:0.6rem;font-weight:700;padding:2px 8px;border-radius:6px;
+      background:${c.bg};color:${c.color};white-space:nowrap">${c.emoji} ${perf.tipo}</span>`);
+  }
+  if (perf.ml) {
+    parts.push(`<span style="font-size:0.6rem;font-weight:700;padding:2px 8px;border-radius:6px;
+      background:rgba(191,90,242,0.12);color:#BF5AF2;white-space:nowrap">💧 ${perf.ml}ml</span>`);
+  }
+  return parts.length
+    ? `<div style="display:flex;gap:5px;margin-top:5px;flex-wrap:wrap">${parts.join('')}</div>`
+    : '';
+}
+
 function parseAlcohol(name) {
   const m = name?.match(/\b(\d+)\/(\d+)\/(\d+(?:[.,]\d+)?)\b/);
   if (!m) return null;
@@ -118,6 +151,7 @@ function prodHTML(p, editOvr) {
   const ordered = (orders[p.ref] || 0) > 0 ? orders[p.ref] : null;
   const edited  = editOvr[p.ref] && Object.keys(editOvr[p.ref]).length > 0;
   const alc     = parseAlcohol(p.name);
+  const perf    = parsePerfume(p.name);
   const isNew   = !!p.isNew;
 
   let badge;
@@ -144,6 +178,7 @@ function prodHTML(p, editOvr) {
           ${p.ean ? `<span style="font-size:0.6rem;color:var(--text3)">▪ ${p.ean}</span>` : ''}
         </div>
         ${alcoholBadges(alc)}
+        ${perfumeBadges(perf)}
       </div>
       ${badge}
     </div>`;
