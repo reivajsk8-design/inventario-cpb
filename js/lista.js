@@ -8,7 +8,7 @@ const EDIT_FIELDS = [
   { key: 'name',    label: 'Nombre',                type: 'text'   },
   { key: 'ean',     label: 'EAN',                   type: 'text'   },
   { key: 'family',  label: 'Familia',               type: 'text'   },
-  { key: 'proxium', label: 'PROXIUM (Ref. Proveedor)', type: 'text' },
+  { key: 'proxium', label: 'Ref. Proveedor',           type: 'text' },
   { key: 'pvp',     label: 'PVP (€)',               type: 'number' },
   { key: 'cost',    label: 'Coste (€)',             type: 'number' },
   { key: 'iva',     label: 'IVA (%)',               type: 'number' },
@@ -172,7 +172,7 @@ function openProductSheet(ref) {
         <div>
           <div class="qty-sheet-name">${p.name}</div>
           <div class="qty-sheet-meta">${p.ref}${p.family ? ' · ' + p.family : ''}</div>
-          ${p.ean ? `<div class="qty-sheet-ean">EAN ${p.ean}${p.proxium ? ' · PROXIUM ' + p.proxium : ''}</div>` : ''}
+          ${p.ean ? `<div class="qty-sheet-ean">EAN ${p.ean}${p.proxium ? ' · Ref.Prov. ' + p.proxium : ''}</div>` : ''}
         </div>
       </div>
 
@@ -423,34 +423,34 @@ function openNewArticleSheet() {
   });
 
   document.getElementById('na-save').addEventListener('click', () => {
-    const name     = document.getElementById('na-name').value.trim();
-    const ean      = document.getElementById('na-ean').value.trim();
-    const provRef  = document.getElementById('na-proxium-prov').value.trim();
-    const pvp      = parseFloat(document.getElementById('na-pvp').value) || 0;
-    const cost     = parseFloat(document.getElementById('na-cost').value) || 0;
-    const iva      = parseInt(document.getElementById('na-iva').value) || 21;
+    const name      = document.getElementById('na-name').value.trim();
+    const ean       = document.getElementById('na-ean').value.trim();
+    const supplRef  = document.getElementById('na-proxium-prov').value.trim();
+    const pvp       = parseFloat(document.getElementById('na-pvp').value) || 0;
+    const cost      = parseFloat(document.getElementById('na-cost').value) || 0;
+    const iva       = parseInt(document.getElementById('na-iva').value) || 21;
 
     if (!name) { toast('El nombre es obligatorio', 'red'); return; }
 
-    const proxium = nextProxium();
+    const proxiumCode = nextProxium();
 
-    if (_all.find(p => p.proxium === proxium)) {
+    if (_all.find(p => p.ref === proxiumCode)) {
       toast('Ya existe un artículo con ese código PROXIUM', 'red');
       document.getElementById('na-proxium-preview').textContent = `→ ${nextProxium()}`;
       return;
     }
 
-    const newArt = { ref: proxium, proxium, name, family: _prefix, ean, provRef, pvp, cost, iva, isNew: true };
+    const newArt = { ref: proxiumCode, proxium: supplRef, name, family: _prefix, ean, pvp, cost, iva, isNew: true };
 
     const stored = JSON.parse(localStorage.getItem('ia') || '{}');
-    stored[proxium] = newArt;
+    stored[proxiumCode] = newArt;
     localStorage.setItem('ia', JSON.stringify(stored));
 
     prefixMap.set(_prefix, (prefixMap.get(_prefix) || 0) + 1);
     _all.push(newArt);
     _filtered = [..._all];
     closeSheet();
-    toast(`${proxium} creado ✓`, 'green');
+    toast(`${proxiumCode} creado ✓`, 'green');
     renderList();
   });
 }
