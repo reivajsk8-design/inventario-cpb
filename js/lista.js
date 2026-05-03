@@ -119,6 +119,26 @@ function perfumeBadges(perf) {
     : '';
 }
 
+function parseGramos(name) {
+  if (!name) return null;
+  const kg = name.match(/\b(\d+(?:[.,]\d+)?)\s*KG\b/i);
+  const gr = name.match(/\b(\d+(?:[.,]\d+)?)\s*GRS?\b/i);
+  if (!kg && !gr) return null;
+  if (kg) return { val: parseFloat(kg[1].replace(',', '.')), unit: 'kg' };
+  return { val: parseFloat(gr[1].replace(',', '.')), unit: 'gr' };
+}
+
+function gramosBadge(g) {
+  if (!g) return '';
+  return `
+    <div style="display:flex;gap:5px;margin-top:5px;flex-wrap:wrap">
+      <span style="font-size:0.6rem;font-weight:700;padding:2px 8px;border-radius:6px;
+        background:rgba(162,132,94,0.18);color:#A2845E;white-space:nowrap">
+        ⚖️ ${g.val}${g.unit}
+      </span>
+    </div>`;
+}
+
 function parseAlcohol(name) {
   const m = name?.match(/\b(\d+)\/(\d+)\/(\d+(?:[.,]\d+)?)\b/);
   if (!m) return null;
@@ -152,6 +172,7 @@ function prodHTML(p, editOvr) {
   const edited  = editOvr[p.ref] && Object.keys(editOvr[p.ref]).length > 0;
   const alc     = parseAlcohol(p.name);
   const perf    = parsePerfume(p.name);
+  const gramos  = parseGramos(p.name);
   const isNew   = !!p.isNew;
 
   let badge;
@@ -179,6 +200,7 @@ function prodHTML(p, editOvr) {
         </div>
         ${alcoholBadges(alc)}
         ${perfumeBadges(perf)}
+        ${gramosBadge(gramos)}
       </div>
       ${badge}
     </div>`;
