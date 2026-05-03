@@ -8,6 +8,7 @@ import { mount as mountPedidos,  unmount as unmountPedidos  } from './pedidos.js
 import { mount as mountResumen,   unmount as unmountResumen   } from './resumen.js';
 import { mount as mountAlbaranes, unmount as unmountAlbaranes } from './albaranes.js';
 import { toast } from './ui.js';
+import { showTutorial } from './tutorial.js';
 
 const TABS = {
   lista:    { mount: mountLista,    unmount: unmountLista,    title: 'Inventario CPB' },
@@ -46,7 +47,13 @@ async function init() {
     if (_currentTab) TABS[_currentTab]?.mount();
   });
 
+  const helpBtn = document.getElementById('btn-nav-right');
+  helpBtn.textContent  = '?';
+  helpBtn.title        = 'Ver tutorial';
+  helpBtn.addEventListener('click', () => showTutorial({ force: true }));
+
   switchTab('lista');
+  showTutorial();
 }
 
 function switchTab(tab) {
