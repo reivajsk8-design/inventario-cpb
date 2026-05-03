@@ -18,8 +18,9 @@ function setTerminal(t) { localStorage.setItem('itp', t); }
 
 export async function mount() {
   const editOvr = JSON.parse(localStorage.getItem('ie') || '{}');
-  const raw = await getAllProducts();
-  _all = raw.map(p => editOvr[p.ref] ? { ...p, ...editOvr[p.ref] } : p);
+  const raw     = await getAllProducts();
+  const newArts = Object.values(JSON.parse(localStorage.getItem('ia') || '{}'));
+  _all = [...raw, ...newArts].map(p => editOvr[p.ref] ? { ...p, ...editOvr[p.ref] } : p);
 
   const families = await getFamilies();
   _filterBar = mountFilterBar(families, ({ query, filterType, families: fams }) => {
@@ -62,7 +63,7 @@ function openEditSheet(p) {
       <div>
         <div class="qty-sheet-name">${p.name}</div>
         <div class="qty-sheet-meta">${p.ref}${p.family ? ' · ' + p.family : ''}</div>
-        <div class="qty-sheet-ean">EAN ${p.ean || '—'}${p.proxium ? ' · PROXIUM ' + p.proxium : ''}</div>
+        <div class="qty-sheet-ean">EAN ${p.ean || '—'}${p.proxium ? ' · Ref.Prov. ' + p.proxium : ''}</div>
       </div>
     </div>
     <div class="qty-label" style="margin-bottom:6px">Cantidad total en pedido</div>
