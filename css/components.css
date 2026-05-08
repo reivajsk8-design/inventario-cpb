@@ -295,6 +295,28 @@
 .tag-counted { background: rgba(48,209,88,0.15);  color: var(--green); }
 .tag-ordered { background: rgba(10,132,255,0.15); color: var(--accent); }
 
+/* ── STOCK COMPARISON (Conteos) ── */
+.stock-banner {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 12px;
+  background: rgba(10,132,255,0.07);
+  border-bottom: 0.5px solid rgba(10,132,255,0.12);
+  font-size: 0.65rem;
+}
+.stock-banner-item       { font-weight: 700; }
+.stock-banner-item.match { color: var(--green); }
+.stock-banner-item.diff  { color: var(--amber); }
+.stock-banner-item.pend  { color: var(--text3); }
+.stock-banner-sep        { color: var(--text3); }
+
+.stock-cmp { margin-left: auto; text-align: right; flex-shrink: 0; font-size: 0.88rem; font-weight: 800; }
+.stock-cmp small { display: block; font-size: 0.58rem; font-weight: 400; margin-top: 1px; }
+.stock-match   { color: var(--green); }
+.stock-diff    { color: var(--amber); }
+.stock-pending { color: var(--text3); }
+
 /* ── SPIN ANIMATION ── */
 @keyframes spin { to { transform: rotate(360deg); } }
 
