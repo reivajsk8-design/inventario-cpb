@@ -121,11 +121,9 @@ function perfumeBadges(perf) {
 
 function parseGramos(name) {
   if (!name) return null;
-  const kg = name.match(/\b(\d+(?:[.,]\d+)?)\s*KG\b/i);
-  const gr = name.match(/\b(\d+(?:[.,]\d+)?)\s*GRS?\b/i);
-  if (!kg && !gr) return null;
-  if (kg) return { val: parseFloat(kg[1].replace(',', '.')), unit: 'kg' };
-  return { val: parseFloat(gr[1].replace(',', '.')), unit: 'gr' };
+  const m = name.match(/\b(\d+(?:[.,]\d+)?)\s*(KGS?|GRS?|G)\b/i);
+  if (!m) return null;
+  return { val: parseFloat(m[1].replace(',', '.')), unit: m[2].toUpperCase().startsWith('K') ? 'kg' : 'gr' };
 }
 
 function gramosBadge(g) {
