@@ -48,9 +48,10 @@ async function init() {
   });
 
   const helpBtn = document.getElementById('btn-nav-right');
-  helpBtn.textContent  = '?';
-  helpBtn.title        = 'Ver tutorial';
-  helpBtn.addEventListener('click', () => showTutorial({ force: true }));
+  helpBtn.textContent      = '?';
+  helpBtn.title            = 'Ver tutorial';
+  helpBtn.onclick          = () => showTutorial({ force: true });
+  helpBtn._tutorialHandler = helpBtn.onclick;
 
   switchTab('lista');
   showTutorial();

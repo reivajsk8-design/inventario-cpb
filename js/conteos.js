@@ -50,9 +50,10 @@ export async function mount() {
 
 export function unmount() {
   if (_filterBar) _filterBar.hide();
+  // Restaurar el botón de tutorial que app.js registró al arrancar
   const navBtn = document.getElementById('btn-nav-right');
-  navBtn.textContent = '';
-  navBtn.onclick = null;
+  navBtn.textContent = '?';
+  navBtn.onclick = navBtn._tutorialHandler || null;
 }
 
 function openEditSheet(p) {
