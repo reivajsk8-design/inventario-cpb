@@ -384,7 +384,7 @@ function openStockPanel() {
     openSheet(`
       <div style="font-size:0.95rem;font-weight:700;color:var(--text);margin-bottom:4px">Stock del sistema</div>
       <div style="font-size:0.7rem;color:var(--text3);margin-bottom:20px">${stockCount} artículos cargados</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:24px">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:20px">
         <div style="background:rgba(48,209,88,0.1);border-radius:12px;padding:14px 8px;text-align:center">
           <div style="font-size:1.6rem;font-weight:800;color:var(--green)">${cuadrados}</div>
           <div style="font-size:0.6rem;color:var(--text3);margin-top:4px;line-height:1.3">Cuadrados</div>
@@ -398,6 +398,9 @@ function openStockPanel() {
           <div style="font-size:0.6rem;color:var(--text3);margin-top:4px;line-height:1.3">Sin contar</div>
         </div>
       </div>
+      <button id="btn-export-comp" class="add-btn" style="margin-bottom:10px">
+        ⬇ Exportar comparativa (Excel)
+      </button>
       <button id="btn-clear-stock" style="
         display:block;width:100%;padding:14px;border-radius:var(--radius-md);
         background:rgba(255,69,58,0.1);color:var(--red);
@@ -405,11 +408,94 @@ function openStockPanel() {
       ">Eliminar stock cargado</button>
     `);
 
+    document.getElementById('btn-export-comp').addEventListener('click', () => {
+      exportComparativa(stock, counts);
+    });
+
     document.getElementById('btn-clear-stock').addEventListener('click', () => {
       clearStock();
       closeSheet();
       toast('Stock eliminado', 'amber');
       renderList();
     });
+  }
+}
+
+function exportComparativa(stock, counts) {
+  // Construye las filas ordenadas: diferencias primero (por magnitud), luego cuadrados, luego sin contar
+  const rows = [];
+
+  // Separar en grupos
+  const diferencias = [], cuadrados = [], sinContar = [];
+
+  Object.entries(stock).forEach(([ref, sysQty]) => {
+    const prod    = _all.find(x => x.ref === ref) || {};
+    const c       = counts[ref];
+    const contado = c?.qty ?? null;
+
+    if (contado === null) {
+      sinContar.push({ ref, sysQty, contado: null, diff: null, prod });
+    } else if (contado === sysQty) {
+      cuadrados.push({ ref, sysQty, contado, diff: 0, prod });
+    } else {
+      diferencias.push({ ref, sysQty, contado, diff: contado - sysQty, prod });
+    }
+  });
+
+  // Diferencias ordenadas por magnitud absoluta descendente
+  diferencias.sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff));
+
+  const toRow = ({ ref, sysQty, contado, diff, prod }) => {
+    let estado;
+    if (contado === null)  estado = 'Sin contar';
+    else if (diff === 0)   estado = 'Cuadra';
+    else if (diff > 0)     estado = `Exceso +${diff}`;
+    else                   estado = `Falta ${diff}`;
+
+    return [
+      ref,
+      prod.name    || '',
+      prod.family  || '',
+      sysQty,
+      contado ?? '',
+      contado !== null ? diff : '',
+      estado,
+    ];
+  };
+
+  rows.push(['REF', 'Nombre', 'Familia', 'Stock sistema', 'Contado', 'Diferencia', 'Estado']);
+  diferencias.forEach(r => rows.push(toRow(r)));
+  cuadrados.forEach(r   => rows.push(toRow(r)));
+  sinContar.forEach(r   => rows.push(toRow(r)));
+
+  const doExport = () => {
+    const wb  = XLSX.utils.book_new();
+    const ws  = XLSX.utils.aoa_to_sheet(rows);
+
+    // Ancho de columnas
+    ws['!cols'] = [{ wch: 14 }, { wch: 40 }, { wch: 16 }, { wch: 14 }, { wch: 10 }, { wch: 12 }, { wch: 14 }];
+
+    XLSX.utils.book_append_sheet(wb, ws, 'Comparativa');
+
+    const user     = (localStorage.getItem('ic_user') || 'export').replace(/\s+/g, '_');
+    const terminal = localStorage.getItem('itc') || '';
+    const date     = new Date();
+    const dd       = String(date.getDate()).padStart(2, '0');
+    const mm       = String(date.getMonth() + 1).padStart(2, '0');
+    const yyyy     = date.getFullYear();
+    const parts    = ['comparativa_stock', terminal, user, `${dd}-${mm}-${yyyy}`].filter(Boolean);
+
+    XLSX.writeFile(wb, `${parts.join('_')}.xlsx`);
+    toast('Excel exportado', 'green');
+  };
+
+  if (window.XLSX) {
+    doExport();
+  } else {
+    const s   = document.createElement('script');
+    s.src     = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
+    s.onload  = doExport;
+    s.onerror = () => toast('Error al cargar XLSX', 'red');
+    document.head.appendChild(s);
   }
 }
