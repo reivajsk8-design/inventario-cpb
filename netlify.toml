@@ -13,6 +13,11 @@
     Cache-Control = "no-cache"
 
 [[headers]]
+  for = "/eans-extra.json"
+  [headers.values]
+    Cache-Control = "no-cache"
+
+[[headers]]
   for = "/*"
   [headers.values]
     X-Frame-Options        = "DENY"

@@ -3,6 +3,7 @@ import { getAllProducts, getFamilies }    from './db.js';
 import { filterProducts, mountFilterBar } from './filters.js';
 import { openSheet, closeSheet, openQtySheet, toast } from './ui.js';
 import { startScanner }                  from './scanner.js';
+import { matchesEan, openAssignEanSheet } from './eans.js';
 
 const QUICK_QTYS = [6, 12, 24, 48];
 const TERMINALS  = ['D', 'MSC', 'E'];
@@ -38,8 +39,8 @@ export async function mount() {
   renderList();
 
   startScanner(ean => {
-    const p = _all.find(x => x.ean === ean);
-    if (!p) { toast('EAN no encontrado', 'red'); return; }
+    const p = _all.find(x => matchesEan(x, ean));
+    if (!p) { openAssignEanSheet(ean, _all, product => addOrder(product)); return; }
     addOrder(p);
   });
 }

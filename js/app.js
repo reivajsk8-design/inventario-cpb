@@ -2,6 +2,7 @@
 import { openDB, getAllProducts, loadProductsFromNetwork,
          saveProductsToDB, getStoredDBVersion,
          setStoredDBVersion, fetchRemoteVersion } from './db.js';
+import { loadEansExtra } from './eans.js';
 import { mount as mountLista,    unmount as unmountLista    } from './lista.js';
 import { mount as mountConteos,  unmount as unmountConteos  } from './conteos.js';
 import { mount as mountPedidos,  unmount as unmountPedidos  } from './pedidos.js';
@@ -22,6 +23,7 @@ let _currentTab = null;
 
 async function init() {
   await openDB();
+  await loadEansExtra();
 
   const products = await getAllProducts();
   if (products.length === 0) {

@@ -1,4 +1,5 @@
 // js/filters.js
+import { getExtraEans } from './eans.js';
 
 function norm(s) {
   return (s ?? '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
@@ -9,13 +10,14 @@ export function filterProducts(products, query, filterType, families) {
   return products.filter(p => {
     if (families.length > 0 && !families.includes(p.family)) return false;
     if (!q) return true;
-    if (filterType === 'ean')     return (p.ean ?? '').includes(q);
+    if (filterType === 'ean')     return (p.ean ?? '').includes(q) || getExtraEans(p.ref).some(e => e.includes(q));
     if (filterType === 'ref')     return norm(p.ref).includes(q);
     if (filterType === 'family')  return norm(p.family).includes(q);
     if (filterType === 'proxium') return norm(p.proxium).includes(q);
     return norm(p.name).includes(q) ||
            norm(p.ref).includes(q)  ||
            (p.ean ?? '').includes(q) ||
+           getExtraEans(p.ref).some(e => e.includes(q)) ||
            norm(p.family).includes(q) ||
            norm(p.proxium).includes(q);
   });

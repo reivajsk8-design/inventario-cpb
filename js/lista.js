@@ -2,6 +2,8 @@
 import { getAllProducts, getFamilies }    from './db.js';
 import { filterProducts, mountFilterBar } from './filters.js';
 import { openSheet, closeSheet, toast }  from './ui.js';
+import { getExtraEans, isLocalEan, assignEan, removeLocalEan,
+         countPending, clearPendingEans, exportEansJSON } from './eans.js';
 
 const PAGE = 50;
 const EDIT_FIELDS = [
@@ -62,14 +64,32 @@ function renderList() {
   const items = _filtered.slice(0, (_page + 1) * PAGE);
   const more  = _filtered.length > items.length;
 
+  const pending = countPending();
+  const pendingBanner = pending > 0 ? `
+    <div style="margin:8px 12px 4px;padding:10px 14px;border-radius:12px;
+      background:rgba(255,159,10,0.12);border:1px solid rgba(255,159,10,0.3);
+      display:flex;align-items:center;gap:10px">
+      <span style="font-size:0.78rem;color:var(--amber);flex:1">
+        📋 ${pending} EAN${pending > 1 ? 's' : ''} asignado${pending > 1 ? 's' : ''} sin publicar
+      </span>
+      <button id="btn-export-eans" style="padding:6px 12px;border-radius:8px;
+        background:var(--amber);color:#000;font-size:0.72rem;font-weight:700">
+        ⬇ Exportar
+      </button>
+      <button id="btn-clear-eans" style="padding:6px 10px;border-radius:8px;
+        background:rgba(255,69,58,0.15);color:var(--red);font-size:0.72rem;font-weight:700"
+        title="Limpiar asignaciones locales">🗑</button>
+    </div>` : '';
+
   if (items.length === 0) {
-    main.innerHTML = `<div class="empty-state"><div class="icon">🔍</div><p>Sin resultados</p></div>${_FAB}`;
+    main.innerHTML = `${pendingBanner}<div class="empty-state"><div class="icon">🔍</div><p>Sin resultados</p></div>${_FAB}`;
     document.getElementById('fab-new-art').addEventListener('click', openNewArticleSheet);
+    bindPendingBanner();
     return;
   }
 
   const editOvr = JSON.parse(localStorage.getItem('ie') || '{}');
-  main.innerHTML = `<div class="prod-list">${items.map(p => prodHTML(p, editOvr)).join('')}${
+  main.innerHTML = `${pendingBanner}<div class="prod-list">${items.map(p => prodHTML(p, editOvr)).join('')}${
     more
       ? `<button id="btn-more" style="display:block;width:100%;padding:14px;color:var(--accent);font-size:0.82rem;font-weight:700;text-align:center">
            Ver más (${_filtered.length - items.length})
@@ -84,6 +104,26 @@ function renderList() {
 
   document.getElementById('btn-more')?.addEventListener('click', () => { _page++; renderList(); });
   document.getElementById('fab-new-art').addEventListener('click', openNewArticleSheet);
+  bindPendingBanner();
+}
+
+function bindPendingBanner() {
+  document.getElementById('btn-export-eans')?.addEventListener('click', () => {
+    const json = exportEansJSON();
+    const blob = new Blob([json], { type: 'application/json' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = 'eans-extra.json';
+    a.click();
+    URL.revokeObjectURL(url);
+    toast('eans-extra.json descargado — súbelo al repo y haz deploy', 'green');
+  });
+  document.getElementById('btn-clear-eans')?.addEventListener('click', () => {
+    clearPendingEans();
+    renderList();
+    toast('Asignaciones locales eliminadas', 'amber');
+  });
 }
 
 const PERF_TYPE = {
@@ -194,7 +234,9 @@ function prodHTML(p, editOvr) {
         </div>
         <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
           ${p.family ? `<span class="prod-tag tag-family">${p.family}</span>` : ''}
-          ${p.ean ? `<span style="font-size:0.6rem;color:var(--text3)">▪ ${p.ean}</span>` : ''}
+          ${[p.ean, ...getExtraEans(p.ref)].filter(Boolean).map(e =>
+            `<span style="font-size:0.6rem;color:var(--text3)">▪ ${e}</span>`
+          ).join('')}
         </div>
         ${alcoholBadges(alc)}
         ${perfumeBadges(perf)}
@@ -329,9 +371,63 @@ function openEditSheet(ref) {
                style="width:100%;background:var(--surface2);border-radius:10px;padding:10px 12px;color:var(--text);font-size:0.85rem"
                value="${cur[key] ?? ''}">
       </div>`).join('')}
+    <div style="margin-bottom:14px;padding:12px;background:var(--surface2);border-radius:12px">
+      <div class="qty-label" style="margin-bottom:8px">EANs adicionales</div>
+      <div id="ean-extras-list"></div>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <input id="inp-ean-extra" type="text" inputmode="numeric" placeholder="Nuevo EAN…"
+          style="flex:1;background:var(--surface);border-radius:8px;padding:8px 10px;
+                 color:var(--text);font-size:0.85rem">
+        <button id="btn-add-ean-extra" style="padding:8px 16px;border-radius:8px;
+          background:var(--accent);color:#fff;font-size:0.9rem;font-weight:700">+</button>
+      </div>
+    </div>
     <button id="btn-save-edit" class="add-btn" style="margin-bottom:10px">Guardar cambios</button>
     ${hasEdits ? `<button id="btn-reset-edit" style="width:100%;background:rgba(255,69,58,0.1);border-radius:12px;padding:11px;color:var(--red);font-size:0.78rem;font-weight:600">🗑 Deshacer todas las modificaciones</button>` : ''}
   `);
+
+  const renderEanExtras = () => {
+    const extras  = getExtraEans(ref);
+    const section = document.getElementById('ean-extras-list');
+    if (!section) return;
+    if (extras.length === 0) {
+      section.innerHTML = '<div style="font-size:0.75rem;color:var(--text3)">Sin EANs adicionales</div>';
+      return;
+    }
+    section.innerHTML = extras.map(e => {
+      const local = isLocalEan(ref, e);
+      return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+        <span style="flex:1;font-size:0.78rem;font-family:monospace;color:var(--text)">${e}</span>
+        <span style="font-size:0.6rem;padding:2px 6px;border-radius:4px;
+          background:${local ? 'rgba(255,159,10,0.2)' : 'rgba(48,209,88,0.15)'};
+          color:${local ? 'var(--amber)' : 'var(--green)'}">
+          ${local ? 'local' : 'publicado'}
+        </span>
+        ${local ? `<button class="btn-rm-ean" data-ean="${e}" style="
+          padding:3px 8px;border-radius:6px;background:rgba(255,69,58,0.12);
+          color:var(--red);font-size:0.72rem;font-weight:700">✕</button>` : ''}
+      </div>`;
+    }).join('');
+    section.querySelectorAll('.btn-rm-ean').forEach(btn => {
+      btn.addEventListener('click', () => {
+        removeLocalEan(ref, btn.dataset.ean);
+        renderEanExtras();
+        renderList();
+      });
+    });
+  };
+  renderEanExtras();
+
+  document.getElementById('btn-add-ean-extra').addEventListener('click', () => {
+    const ean = document.getElementById('inp-ean-extra').value.trim();
+    if (!ean || !/^\d{8,}$/.test(ean)) { toast('EAN no válido (mínimo 8 dígitos)', 'red'); return; }
+    if (cur.ean === ean || getExtraEans(ref).includes(ean)) { toast('EAN ya asignado', 'amber'); return; }
+    assignEan(ref, ean);
+    document.getElementById('inp-ean-extra').value = '';
+    renderEanExtras();
+    renderList();
+    toast('EAN añadido', 'green');
+  });
 
   document.getElementById('btn-save-edit').onclick = () => {
     const ovr = { ...(editOvr[ref] || {}) };

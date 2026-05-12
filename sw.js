@@ -14,6 +14,7 @@ const PRECACHE = [
   './js/ui.js',
   './js/filters.js',
   './js/scanner.js',
+  './js/eans.js',
   './js/lista.js',
   './js/conteos.js',
   './js/stock.js',
@@ -42,8 +43,8 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
 
-  // Network-first para la BD (se actualiza con frecuencia)
-  if (url.pathname.endsWith('db.json.gz') || url.pathname.endsWith('db-version.json')) {
+  // Network-first para la BD y EANs extra (se actualizan con frecuencia)
+  if (url.pathname.endsWith('db.json.gz') || url.pathname.endsWith('db-version.json') || url.pathname.endsWith('eans-extra.json')) {
     e.respondWith(
       fetch(e.request)
         .then(res => {

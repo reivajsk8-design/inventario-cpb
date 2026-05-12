@@ -4,6 +4,7 @@ import { filterProducts, mountFilterBar }                   from './filters.js';
 import { openSheet, closeSheet, openQtySheet, toast }       from './ui.js';
 import { startScanner }                                     from './scanner.js';
 import { getStock, saveStock, clearStock, parseStockXLSX } from './stock.js';
+import { matchesEan, openAssignEanSheet }                   from './eans.js';
 
 const QUICK_QTYS = [1, 5, 10, 20];
 const TERMINALS  = ['D', 'MSC', 'E'];
@@ -42,8 +43,8 @@ export async function mount() {
   renderList();
 
   startScanner(ean => {
-    const p = _all.find(x => x.ean === ean);
-    if (!p) { toast('EAN no encontrado', 'red'); return; }
+    const p = _all.find(x => matchesEan(x, ean));
+    if (!p) { openAssignEanSheet(ean, _all, product => openEditSheet(product)); return; }
     openEditSheet(p);
   });
 }
