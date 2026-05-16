@@ -70,8 +70,12 @@ function render() {
       style="background:rgba(10,132,255,0.08);color:var(--accent);border:1px solid rgba(10,132,255,0.2)">
       ✦ Exportar artículos nuevos (${newCount})
     </button>` : ''}
+    <a class="export-btn" href="./precio-scan.html"
+      style="background:linear-gradient(135deg,#BF5AF2,#0A84FF);color:#fff;margin-top:20px;display:block;text-decoration:none;text-align:center">
+      🌐 PrecioScan — Consultar precios de mercado
+    </a>
     <button class="export-btn" id="btn-reset"
-      style="background:rgba(255,69,58,0.12);color:var(--red);margin-top:20px">
+      style="background:rgba(255,69,58,0.12);color:var(--red);margin-top:8px">
       🗑 Borrar todos los conteos y pedidos
     </button>
   `;
