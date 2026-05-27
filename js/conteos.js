@@ -1,28 +1,57 @@
 // js/conteos.js
-import { getAllProducts, getFamilies }                      from './db.js';
-import { filterProducts, mountFilterBar }                   from './filters.js';
-import { openSheet, closeSheet, openQtySheet, toast }       from './ui.js';
-import { startScanner }                                     from './scanner.js';
-import { getStock, saveStock, clearStock, parseStockXLSX } from './stock.js';
-import { matchesEan, openAssignEanSheet }                   from './eans.js';
+import { getAllProducts, getFamilies }                       from './db.js';
+import { filterProducts, mountFilterBar }                    from './filters.js';
+import { openCountSheet, openSheet, closeSheet, toast } from './ui.js';
+import { startScanner }                                      from './scanner.js';
+import { getStock, saveStock, clearStock, parseStockXLSX }  from './stock.js';
+import { matchesEan, openAssignEanSheet }                    from './eans.js';
 
 const QUICK_QTYS = [1, 5, 10, 20];
-const TERMINALS  = ['D', 'MSC', 'E'];
 const PAGE = 50;
-
-const TERM_COLORS = {
-  D:   { bg: '#FF6B00', bgOff: 'rgba(255,107,0,0.12)',   color: '#fff',    colorOff: 'rgba(255,107,0,0.8)'   },
-  MSC: { bg: '#FFD60A', bgOff: 'rgba(255,214,10,0.12)',  color: '#1a1a1a', colorOff: 'rgba(255,214,10,0.85)' },
-  E:   { bg: '#0A84FF', bgOff: 'rgba(10,132,255,0.12)',  color: '#fff',    colorOff: 'rgba(10,132,255,0.8)'  },
-};
-
 let _all = [], _page = 0, _filterBar = null;
 let _query = '', _filterType = 'all', _activeFamilies = [];
 
-function getCounts()    { return JSON.parse(localStorage.getItem('ic') || '{}'); }
-function saveCounts(c)  { localStorage.setItem('ic', JSON.stringify(c)); }
-function getTerminal()  { return localStorage.getItem('itc') || TERMINALS[0]; }
-function setTerminal(t) { localStorage.setItem('itc', t); }
+function getZona()  { return localStorage.getItem('ic_zona') || 'almacen'; }
+function setZona(z) { localStorage.setItem('ic_zona', z); }
+
+function totalQty(c) {
+  if (!c) return 0;
+  if ('almacen' in c || 'tienda' in c) return (c.almacen || 0) + (c.tienda || 0);
+  return c.qty || 0;
+}
+
+function getCounts() {
+  const raw = JSON.parse(localStorage.getItem('ic') || '{}');
+  const needsMigration = Object.values(raw).some(v => v && 'qty' in v && !('almacen' in v));
+  if (!needsMigration) return raw;
+  const migrated = {};
+  for (const [ref, v] of Object.entries(raw)) {
+    if (v && 'qty' in v && !('almacen' in v)) {
+      migrated[ref] = { almacen: v.qty || 0, tienda: 0, notes: v.notes || '' };
+    } else {
+      migrated[ref] = v;
+    }
+  }
+  localStorage.setItem('ic', JSON.stringify(migrated));
+  return migrated;
+}
+
+function saveCounts(c) { localStorage.setItem('ic', JSON.stringify(c)); }
+
+function renderZoneBar(el) {
+  const zona = getZona();
+  el.innerHTML = `
+    <div class="zona-bar">
+      <button class="zona-btn ${zona === 'almacen' ? 'active' : ''}" data-zona="almacen">🏪 Almacén</button>
+      <button class="zona-btn ${zona === 'tienda'  ? 'active' : ''}" data-zona="tienda">🏬 Tienda</button>
+    </div>`;
+  el.querySelectorAll('.zona-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      setZona(btn.dataset.zona);
+      renderZoneBar(el);
+    });
+  });
+}
 
 export async function mount() {
   const editOvr = JSON.parse(localStorage.getItem('ie') || '{}');
@@ -40,105 +69,71 @@ export async function mount() {
   navBtn.textContent = '📊';
   navBtn.onclick = openStockPanel;
 
+  let zoneBar = document.getElementById('conteos-zone-bar');
+  if (!zoneBar) {
+    zoneBar = document.createElement('div');
+    zoneBar.id = 'conteos-zone-bar';
+    document.getElementById('nav').appendChild(zoneBar);
+  }
+  renderZoneBar(zoneBar);
+
   renderList();
 
   startScanner(ean => {
     const p = _all.find(x => matchesEan(x, ean));
-    if (!p) { openAssignEanSheet(ean, _all, product => openEditSheet(product)); return; }
-    openEditSheet(p);
+    if (!p) { openAssignEanSheet(ean, _all, product => addQty(product)); return; }
+    addQty(p);
   });
 }
 
 export function unmount() {
   if (_filterBar) _filterBar.hide();
-  // Restaurar el botón de tutorial que app.js registró al arrancar
   const navBtn = document.getElementById('btn-nav-right');
   navBtn.textContent = '?';
   navBtn.onclick = navBtn._tutorialHandler || null;
+  const zoneBar = document.getElementById('conteos-zone-bar');
+  if (zoneBar) zoneBar.remove();
 }
 
-function openEditSheet(p) {
-  const counts = getCounts();
-  let qty      = counts[p.ref]?.qty || 0;
-  let fresh    = true; // primer dígito reemplaza en vez de añadir
+function addQty(p) {
+  openCountSheet(p, getCounts(), getZona(), QUICK_QTYS, (result) => {
+    const all = getCounts();
+    const c   = all[p.ref] || { almacen: 0, tienda: 0, notes: '' };
 
-  openSheet(`
-    <div class="qty-sheet-product">
-      <div class="prod-avatar" style="background:rgba(48,209,88,0.2);color:var(--green)">
-        ${(p.family || '?').slice(0, 2).toUpperCase()}
-      </div>
-      <div>
-        <div class="qty-sheet-name">${p.name}</div>
-        <div class="qty-sheet-meta">${p.ref}${p.family ? ' · ' + p.family : ''}</div>
-        <div class="qty-sheet-ean">EAN ${p.ean || '—'}</div>
-      </div>
-    </div>
-    <div class="qty-label" style="margin-bottom:6px">Cantidad total en conteo</div>
-    <div class="numpad-display-row">
-      <div class="numpad-display" id="np-display">${qty}</div>
-      <button class="numpad-del" id="np-del">⌫</button>
-    </div>
-    <div class="numpad" id="np-grid">
-      ${[1,2,3,4,5,6,7,8,9].map(n =>
-        `<button class="np-btn" data-n="${n}">${n}</button>`).join('')}
-      <button class="np-btn zero" data-n="0">0</button>
-      <button class="np-btn confirm" data-n="ok">✓</button>
-    </div>
-    <button id="btn-save-qty" class="add-btn" style="background:var(--green);margin-bottom:10px">
-      Guardar (${qty} uds)
-    </button>
-    <button id="btn-del-item" style="width:100%;padding:12px;border-radius:12px;
-      background:rgba(255,69,58,0.12);color:var(--red);font-size:0.82rem;font-weight:700">
-      🗑 Eliminar del conteo
-    </button>
-  `);
-
-  const display = () => document.getElementById('np-display');
-  const saveBtn = () => document.getElementById('btn-save-qty');
-  const syncUI  = () => {
-    display().textContent = qty;
-    saveBtn().textContent = `Guardar (${qty} uds)`;
-  };
-
-  document.getElementById('np-grid').addEventListener('click', e => {
-    const n = e.target.dataset.n;
-    if (!n) return;
-    if (n === 'ok') { doSave(); return; }
-    qty   = Math.min(parseInt((fresh ? '' : String(qty)) + n) || 0, 9999);
-    fresh = false;
-    syncUI();
-  });
-
-  document.getElementById('np-del').addEventListener('click', () => {
-    qty   = parseInt(String(qty).slice(0, -1)) || 0;
-    fresh = false;
-    syncUI();
-  });
-
-  document.getElementById('btn-save-qty').addEventListener('click', doSave);
-
-  document.getElementById('btn-del-item').addEventListener('click', () => {
-    const counts = getCounts();
-    delete counts[p.ref];
-    saveCounts(counts);
-    toast(`${p.name} eliminado del conteo`, 'amber');
-    closeSheet();
-    renderList();
-  });
-
-  function doSave() {
-    const counts = getCounts();
-    if (qty <= 0) {
-      delete counts[p.ref];
-      toast(`${p.name} eliminado del conteo`, 'amber');
-    } else {
-      counts[p.ref] = { qty, notes: counts[p.ref]?.notes || '' };
-      toast(`${p.name} — ${qty} uds guardado`, 'green');
+    if (result.type === 'add') {
+      c[result.zona] = (c[result.zona] || 0) + result.qty;
+      setZona(result.zona);
+      const zoneBar = document.getElementById('conteos-zone-bar');
+      if (zoneBar) renderZoneBar(zoneBar);
+    } else if (result.type === 'correct') {
+      c.almacen = result.almacen;
+      c.tienda  = result.tienda;
+    } else if (result.type === 'zero') {
+      c.almacen = 0;
+      c.tienda  = 0;
     }
-    saveCounts(counts);
-    closeSheet();
+
+    const tot = (c.almacen || 0) + (c.tienda || 0);
+    if (tot === 0 && !c.notes) {
+      delete all[p.ref];
+    } else {
+      all[p.ref] = c;
+    }
+    saveCounts(all);
+
+    if (result.type === 'add') {
+      toast(`${p.name} — ${tot} ud. total`, 'green');
+    } else if (result.type === 'correct') {
+      toast('Conteo corregido', 'green');
+    } else {
+      toast(`${p.name} — puesto a 0`, 'amber');
+    }
     renderList();
-  }
+  }, (newZona) => {
+    setZona(newZona);
+    const zoneBar = document.getElementById('conteos-zone-bar');
+    if (zoneBar) renderZoneBar(zoneBar);
+  });
 }
 
 function renderList() {
@@ -146,46 +141,44 @@ function renderList() {
   const counts      = getCounts();
   const stock       = getStock();
   const stockLoaded = Object.keys(stock).length > 0;
-  const terminal    = getTerminal();
   const hasFilter   = _query.trim() || _activeFamilies.length > 0;
 
-  const contados = _all.filter(p => (counts[p.ref]?.qty || 0) > 0);
+  const contados = _all.filter(p => totalQty(counts[p.ref]) > 0);
   const items = hasFilter
     ? filterProducts(contados, _query, _filterType, _activeFamilies)
     : [...contados].sort((a, b) => {
         if (stockLoaded) {
-          // Diferencias primero, luego cuadrados, luego sin stock del sistema
           const priA = stockPriority(a.ref, counts, stock);
           const priB = stockPriority(b.ref, counts, stock);
           if (priA !== priB) return priA - priB;
         }
-        return (counts[b.ref]?.qty || 0) - (counts[a.ref]?.qty || 0);
+        return totalQty(counts[b.ref]) - totalQty(counts[a.ref]);
       });
 
   const page          = items.slice(0, (_page + 1) * PAGE);
   const more          = items.length > page.length;
-  const totalUnidades = contados.reduce((s, p) => s + (counts[p.ref]?.qty || 0), 0);
+  const totalContados = Object.keys(counts).filter(r => totalQty(counts[r]) > 0).length;
 
-  // Stock stats y sección "sin contar"
+  if (items.length === 0) {
+    main.innerHTML = !hasFilter && contados.length === 0
+      ? `<div class="empty-state">
+           <div class="icon">🔢</div>
+           <p style="font-weight:700;color:var(--text)">Sin conteos todavía</p>
+           <p style="color:var(--text3);font-size:0.82rem">Escanea o toca un artículo<br>en <strong>Lista</strong> para empezar.</p>
+         </div>`
+      : `<div class="empty-state"><div class="icon">🔍</div><p>Sin resultados en el conteo</p></div>`;
+    return;
+  }
+
   let stockBannerHTML = '';
-  let sinContarHTML   = '';
   if (stockLoaded) {
     let cuadrados = 0, diffs = 0, pending = 0;
-    const sinContarItems = [];
-
     Object.entries(stock).forEach(([ref, sysQty]) => {
-      const c = counts[ref];
-      if (!c?.qty) {
-        pending++;
-        const prod = _all.find(x => x.ref === ref);
-        sinContarItems.push({ ref, sysQty, name: prod?.name || ref, family: prod?.family || '' });
-      } else if (c.qty === sysQty) {
-        cuadrados++;
-      } else {
-        diffs++;
-      }
+      const tot = totalQty(counts[ref]);
+      if (!tot)                pending++;
+      else if (tot === sysQty) cuadrados++;
+      else                     diffs++;
     });
-
     stockBannerHTML = `
       <div class="stock-banner">
         <span class="stock-banner-item match">✓ ${cuadrados} cuadrados</span>
@@ -194,121 +187,82 @@ function renderList() {
         <span class="stock-banner-sep">·</span>
         <span class="stock-banner-item pend">◯ ${pending} sin contar</span>
       </div>`;
-
-    if (sinContarItems.length > 0 && !hasFilter) {
-      const shown = sinContarItems.slice(0, 20);
-      sinContarHTML = `
-        <div style="padding:12px 12px 4px;font-size:0.65rem;color:var(--text3)">
-          ◯ Sin contar del sistema (${sinContarItems.length})
-        </div>
-        <div class="prod-list" style="margin-bottom:12px">
-          ${shown.map(item => `
-            <div class="prod-item sin-contar-item" data-ref="${item.ref}" style="opacity:0.7">
-              <div style="flex:1;min-width:0">
-                <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-bottom:4px">
-                  <span class="prod-tag tag-ref">${item.ref}</span>
-                  <div class="prod-name" style="flex:1;min-width:80px">${item.name}</div>
-                </div>
-                ${item.family ? `<div><span class="prod-tag tag-family">${item.family}</span></div>` : ''}
-              </div>
-              <div class="stock-cmp stock-pending">${item.sysQty}<small>en sistema</small></div>
-            </div>`).join('')}
-          ${sinContarItems.length > 20
-            ? `<div style="padding:10px 14px;font-size:0.68rem;color:var(--text3);text-align:center">
-                 + ${sinContarItems.length - 20} artículos más sin contar
-               </div>`
-            : ''}
-        </div>`;
-    }
   }
 
   main.innerHTML = `
-    <div style="padding:12px 12px 6px;display:flex;gap:8px">
-      ${TERMINALS.map(t => {
-        const c = TERM_COLORS[t]; const on = t === terminal;
-        return `<button data-term="${t}" style="
-          flex:1;padding:11px 4px;border-radius:12px;font-size:0.82rem;font-weight:800;
-          background:${on ? c.bg : c.bgOff};color:${on ? c.color : c.colorOff}">
-          Term. ${t}
-        </button>`;
-      }).join('')}
-    </div>
-    <div style="padding:0 12px 4px;text-align:right;font-size:0.72rem;color:var(--text3)">
-      <strong style="color:var(--green)">${contados.length} refs</strong> · ${totalUnidades} uds
-    </div>
-    <div style="padding:0 12px 4px;font-size:0.65rem;color:var(--text3)">
-      📡 Escanea para añadir · toca para editar cantidad
+    <div style="padding:10px 12px 4px;font-size:0.65rem;color:var(--text3)">
+      📡 Escanea con la pistola o toca un artículo · <strong style="color:var(--green)">${totalContados} contados</strong>
     </div>
     ${stockBannerHTML}
-    ${items.length === 0
-      ? (!hasFilter && !stockLoaded
-          ? `<div class="empty-state">
-               <div class="icon">🔢</div>
-               <p style="font-weight:700;color:var(--text)">Sin conteos todavía</p>
-               <p style="color:var(--text3);font-size:0.82rem">Ve a <strong>Lista</strong> y toca un artículo<br>para empezar a contar.</p>
-             </div>`
-          : hasFilter
-            ? `<div class="empty-state"><div class="icon">🔍</div><p>Sin resultados en el conteo</p></div>`
-            : '')
-      : `<div class="prod-list">
-           ${page.map(p => {
-             const c      = counts[p.ref];
-             const sysQty = stock[p.ref];
-             const isDiff = stockLoaded && sysQty !== undefined && c?.qty !== sysQty;
-             const rowStyle = isDiff ? 'border-left:3px solid var(--amber);' : '';
+    <div class="prod-list">
+      ${page.map(p => {
+        const c       = counts[p.ref];
+        const tot     = totalQty(c);
+        const counted = tot > 0;
+        const alm     = c?.almacen ?? 0;
+        const tie     = c?.tienda  ?? 0;
+        const sysQty  = stock[p.ref];
 
-             let badge;
-             if (!stockLoaded || sysQty === undefined) {
-               badge = `<div class="prod-qty-badge" style="color:var(--green)">${c.qty}<small>uds</small></div>`;
-             } else if (c.qty === sysQty) {
-               badge = `<div class="stock-cmp stock-match">${c.qty}<small>✓ cuadra</small></div>`;
-             } else {
-               const diff = c.qty - sysQty;
-               const sign = diff > 0 ? '+' : '';
-               badge = `<div class="stock-cmp stock-diff">${c.qty}<small>${sign}${diff} vs ${sysQty} sis.</small></div>`;
-             }
+        let badge;
+        if (!stockLoaded || sysQty === undefined) {
+          if (!counted) {
+            badge = `<div style="font-size:1rem;color:var(--text3);flex-shrink:0;padding-right:2px">+</div>`;
+          } else {
+            const label = (alm > 0 && tie > 0) ? 'A+T' : (alm > 0 ? 'Alm.' : 'Tie.');
+            badge = `<div class="prod-qty-badge" style="color:var(--green)">${tot}<small>${label}</small></div>`;
+          }
+        } else if (!counted) {
+          badge = `<div class="stock-cmp stock-pending">${sysQty}<small>en sistema</small></div>`;
+        } else if (tot === sysQty) {
+          badge = `<div class="stock-cmp stock-match">${tot}<small>✓ cuadra</small></div>`;
+        } else {
+          const diff = tot - sysQty;
+          const sign = diff > 0 ? '+' : '';
+          badge = `<div class="stock-cmp stock-diff">${tot}<small>${sign}${diff} vs ${sysQty} sis.</small></div>`;
+        }
 
-             return `<div class="prod-item" data-ref="${p.ref}" style="${rowStyle}">
-               <div style="flex:1;min-width:0">
-                 <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-bottom:4px">
-                   <span class="prod-tag tag-counted">${p.ref}</span>
-                   ${p.proxium ? `<span class="prod-tag tag-proxium">${p.proxium}</span>` : ''}
-                   <div class="prod-name" style="flex:1;min-width:80px">${p.name}</div>
-                 </div>
-                 <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-                   ${p.family ? `<span class="prod-tag tag-family">${p.family}</span>` : ''}
-                   ${p.ean ? `<span style="font-size:0.6rem;color:var(--text3)">▪ ${p.ean}</span>` : ''}
-                 </div>
-               </div>
-               ${badge}
-             </div>`;
-           }).join('')}
-           ${more ? `<button id="btn-more" style="display:block;width:100%;padding:14px;color:var(--accent);font-size:0.82rem;font-weight:700;text-align:center">Ver más (${items.length - page.length})</button>` : ''}
-         </div>`}
-    ${sinContarHTML}
-  `;
+        const rowStyle = (stockLoaded && sysQty !== undefined && counted && tot !== sysQty)
+          ? 'border-left:3px solid var(--amber);'
+          : '';
 
-  main.querySelectorAll('[data-term]').forEach(btn => {
-    btn.addEventListener('click', () => { setTerminal(btn.dataset.term); renderList(); });
-  });
+        return `<div class="prod-item" data-ref="${p.ref}" style="${rowStyle}">
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-bottom:4px">
+              <span class="prod-tag ${counted ? 'tag-counted' : 'tag-ref'}">${p.ref}</span>
+              ${p.proxium ? `<span class="prod-tag tag-proxium">${p.proxium}</span>` : ''}
+              <div class="prod-name" style="flex:1;min-width:80px">${p.name}</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+              ${p.family ? `<span class="prod-tag tag-family">${p.family}</span>` : ''}
+              ${p.ean ? `<span style="font-size:0.6rem;color:var(--text3)">▪ ${p.ean}</span>` : ''}
+            </div>
+          </div>
+          ${badge}
+        </div>`;
+      }).join('')}
+      ${more ? `<button id="btn-more" style="display:block;width:100%;padding:14px;color:var(--accent);font-size:0.82rem;font-weight:700;text-align:center">Ver más (${items.length - page.length})</button>` : ''}
+    </div>`;
 
-  main.querySelectorAll('.prod-item[data-ref]').forEach(el => {
+  main.querySelectorAll('.prod-item').forEach(el => {
     el.addEventListener('click', () => {
       const p = _all.find(x => x.ref === el.dataset.ref);
-      if (p) openEditSheet(p);
+      if (p) addQty(p);
     });
   });
 
   document.getElementById('btn-more')?.addEventListener('click', () => { _page++; renderList(); });
 }
 
-// Orden de prioridad cuando hay stock: diferencias primero, luego cuadrados, luego sin dato
 function stockPriority(ref, counts, stock) {
   const sysQty  = stock[ref];
   const c       = counts[ref];
-  if (sysQty === undefined) return 2;
-  if (c?.qty && c.qty !== sysQty) return 0; // diferencia
-  return 1; // cuadra
+  const tot     = totalQty(c);
+  const counted = tot > 0;
+  if (sysQty !== undefined && counted && tot !== sysQty) return 0;
+  if (sysQty !== undefined && !counted)                  return 1;
+  if (sysQty !== undefined && counted && tot === sysQty) return 2;
+  if (sysQty === undefined && counted)                   return 3;
+  return 4;
 }
 
 function openStockPanel() {
@@ -376,10 +330,10 @@ function openStockPanel() {
     const counts = getCounts();
     let cuadrados = 0, diffs = 0, pending = 0;
     Object.entries(stock).forEach(([ref, sysQty]) => {
-      const c = counts[ref];
-      if (!c?.qty)               pending++;
-      else if (c.qty === sysQty) cuadrados++;
-      else                       diffs++;
+      const tot = totalQty(counts[ref]);
+      if (!tot)                pending++;
+      else if (tot === sysQty) cuadrados++;
+      else                     diffs++;
     });
 
     openSheet(`
@@ -431,8 +385,7 @@ function exportComparativa(stock, counts) {
 
   Object.entries(stock).forEach(([ref, sysQty]) => {
     const prod    = _all.find(x => x.ref === ref) || {};
-    const c       = counts[ref];
-    const contado = c?.qty ?? null;
+    const contado = totalQty(counts[ref]) || null;
 
     if (contado === null) {
       sinContar.push({ ref, sysQty, contado: null, diff: null, prod });

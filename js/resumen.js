@@ -2,6 +2,12 @@
 import { getAllProducts }      from './db.js';
 import { openSheet, closeSheet } from './ui.js';
 
+function totalQtyResumen(v) {
+  if (!v) return 0;
+  if ('almacen' in v || 'tienda' in v) return (v.almacen || 0) + (v.tienda || 0);
+  return v.qty || 0;
+}
+
 let _all = [], _rawAll = [];
 
 export async function mount() {
@@ -20,8 +26,10 @@ function render() {
   const editOvr = JSON.parse(localStorage.getItem('ie') || '{}');
   const newArts = Object.values(JSON.parse(localStorage.getItem('ia') || '{}'));
 
-  const countRefs  = Object.keys(counts).filter(r => counts[r]?.qty > 0);
-  const countUnits = countRefs.reduce((a, r) => a + (counts[r]?.qty || 0), 0);
+  const countRefs  = Object.keys(counts).filter(r => totalQtyResumen(counts[r]) > 0);
+  const almTotal   = countRefs.reduce((a, r) => a + (counts[r]?.almacen ?? counts[r]?.qty ?? 0), 0);
+  const tieTotal   = countRefs.reduce((a, r) => a + (counts[r]?.tienda  ?? 0), 0);
+  const countUnits = almTotal + tieTotal;
   const orderRefs  = Object.keys(orders).filter(r => orders[r] > 0);
   const orderUnits = orderRefs.reduce((a, r) => a + (orders[r] || 0), 0);
   const editCount  = Object.keys(editOvr).length;
@@ -32,7 +40,7 @@ function render() {
       <div class="stat-card">
         <div class="stat-label">Artículos contados</div>
         <div class="stat-value">${countRefs.length}</div>
-        <div class="stat-sub">${countUnits} unidades totales</div>
+        <div class="stat-sub">${countUnits} uds · A:${almTotal} T:${tieTotal}</div>
       </div>
       <div class="stat-card">
         <div class="stat-label">En pedido</div>
@@ -105,12 +113,15 @@ function buildCountsRows(counts) {
   const user     = localStorage.getItem('ic_user') || '';
   const terminal = localStorage.getItem('itr') || '';
   return [
-    ['Usuario', 'Terminal', 'REF', 'Nombre', 'EAN', 'Ref. Proveedor', 'Familia', 'Cantidad', 'Notas'],
+    ['Usuario', 'Terminal', 'REF', 'Nombre', 'EAN', 'Ref. Proveedor', 'Familia', 'Almacén', 'Tienda', 'Total', 'Notas'],
     ...Object.entries(counts)
-      .filter(([, v]) => v?.qty > 0)
+      .filter(([, v]) => totalQtyResumen(v) > 0)
       .map(([ref, v]) => {
-        const p = _all.find(x => x.ref === ref) || {};
-        return [user, terminal, ref, p.name || '', p.ean || '', p.proxium || '', p.family || '', v.qty, v.notes || ''];
+        const p   = _all.find(x => x.ref === ref) || {};
+        const alm = v.almacen ?? (v.qty || 0);
+        const tie = v.tienda  ?? 0;
+        return [user, terminal, ref, p.name || '', p.ean || '', p.proxium || '', p.family || '',
+                alm, tie, alm + tie, v.notes || ''];
       }),
   ];
 }

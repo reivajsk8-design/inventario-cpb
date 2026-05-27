@@ -99,6 +99,29 @@
 .chip.on  { background: var(--accent); color: #fff; }
 .chip.off { background: var(--surface); color: var(--text3); }
 
+/* ── ZONA BAR (Conteos) ── */
+.zona-bar {
+  display: flex;
+  gap: 8px;
+  padding: 8px 12px 10px;
+  border-top: 0.5px solid var(--separator);
+}
+.zona-btn {
+  flex: 1;
+  padding: 8px 10px;
+  border-radius: 20px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  background: var(--surface2);
+  color: var(--text3);
+  transition: background 0.15s, color 0.15s;
+  text-align: center;
+}
+.zona-btn.active {
+  background: var(--accent);
+  color: #fff;
+}
+
 /* ── PRODUCT LIST (grouped) ── */
 .prod-list { padding: 0 12px 12px; }
 .prod-item {
