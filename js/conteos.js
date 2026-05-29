@@ -55,8 +55,9 @@ function renderZoneBar(el) {
 
 export async function mount() {
   const editOvr = JSON.parse(localStorage.getItem('ie') || '{}');
-  const raw = await getAllProducts();
-  _all = raw.map(p => editOvr[p.ref] ? { ...p, ...editOvr[p.ref] } : p);
+  const raw     = await getAllProducts();
+  const newArts = Object.values(JSON.parse(localStorage.getItem('ia') || '{}'));
+  _all = [...raw, ...newArts].map(p => editOvr[p.ref] ? { ...p, ...editOvr[p.ref] } : p);
 
   const families = await getFamilies();
   _filterBar = mountFilterBar(families, ({ query, filterType, families: fams }) => {
@@ -102,12 +103,14 @@ function addQty(p) {
 
     if (result.type === 'add') {
       c[result.zona] = (c[result.zona] || 0) + result.qty;
+      c.ts = Date.now();
       setZona(result.zona);
       const zoneBar = document.getElementById('conteos-zone-bar');
       if (zoneBar) renderZoneBar(zoneBar);
     } else if (result.type === 'correct') {
       c.almacen = result.almacen;
       c.tienda  = result.tienda;
+      c.ts = Date.now();
     } else if (result.type === 'zero') {
       c.almacen = 0;
       c.tienda  = 0;
@@ -152,7 +155,9 @@ function renderList() {
           const priB = stockPriority(b.ref, counts, stock);
           if (priA !== priB) return priA - priB;
         }
-        return totalQty(counts[b.ref]) - totalQty(counts[a.ref]);
+        const tsA = counts[a.ref]?.ts || 0;
+        const tsB = counts[b.ref]?.ts || 0;
+        return tsB - tsA;
       });
 
   const page          = items.slice(0, (_page + 1) * PAGE);

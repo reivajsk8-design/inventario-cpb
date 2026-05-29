@@ -370,6 +370,7 @@ function openProductSheet(ref) {
         c.almacen = c.qty || 0; c.tienda = 0; delete c.qty;
       }
       c[zona] = (c[zona] || 0) + qty;
+      c.ts = Date.now();
       counts[ref] = c;
       saveCounts(counts);
       toast(`${p.name} — ${totalQty(counts[ref])} ud. en conteo`, 'green');
