@@ -1,6 +1,6 @@
 // js/resumen.js
 import { getAllProducts }      from './db.js';
-import { openSheet, closeSheet } from './ui.js';
+import { openSheet, closeSheet, toast } from './ui.js';
 
 function totalQtyResumen(v) {
   if (!v) return 0;
@@ -35,7 +35,15 @@ function render() {
   const editCount  = Object.keys(editOvr).length;
   const newCount   = newArts.length;
 
+  const userName = localStorage.getItem('ic_user') || '';
+
   document.getElementById('main').innerHTML = `
+    <div style="display:flex;align-items:center;gap:8px;padding:14px 4px 2px">
+      <span style="font-size:1rem">👤</span>
+      <span style="font-size:0.88rem;font-weight:700;color:var(--text);flex:1">${userName || '<span style="color:var(--text3)">Sin nombre</span>'}</span>
+      <button id="btn-change-name" style="font-size:0.72rem;color:var(--accent);font-weight:700;padding:4px 10px;
+        background:rgba(10,132,255,0.1);border-radius:8px">Cambiar</button>
+    </div>
     <div class="stat-grid">
       <div class="stat-card">
         <div class="stat-label">Artículos contados</div>
@@ -99,6 +107,29 @@ function render() {
 
   document.getElementById('btn-exp-new')?.addEventListener('click', () =>
     ensureTerminal('itr', () => exportExcel('articulos_nuevos', buildNewArtsRows(newArts), localStorage.getItem('itr') || '')));
+
+  document.getElementById('btn-change-name').addEventListener('click', () => {
+    const current = localStorage.getItem('ic_user') || '';
+    openSheet(`
+      <div style="font-size:0.95rem;font-weight:700;color:var(--text);margin-bottom:6px">👤 Cambiar nombre</div>
+      <div style="font-size:0.72rem;color:var(--text3);margin-bottom:16px">El nuevo nombre se usará en los próximos exports.</div>
+      <input id="inp-new-name" type="text" autocomplete="name" autocapitalize="words"
+        placeholder="Tu nombre…"
+        style="width:100%;background:var(--surface2);border-radius:12px;padding:12px 14px;
+               color:var(--text);font-size:1rem;font-weight:600;margin-bottom:16px"
+        value="${current}">
+      <button id="btn-save-name" class="add-btn">Guardar</button>
+    `);
+    document.getElementById('inp-new-name').select();
+    document.getElementById('btn-save-name').addEventListener('click', () => {
+      const name = document.getElementById('inp-new-name').value.trim();
+      if (!name) { toast('Introduce un nombre', 'red'); return; }
+      localStorage.setItem('ic_user', name);
+      closeSheet();
+      toast('Nombre guardado', 'green');
+      render();
+    });
+  });
 
   document.getElementById('btn-reset').addEventListener('click', () => {
     if (!confirm('¿Borrar todos los conteos y pedidos? Esta acción no se puede deshacer.')) return;

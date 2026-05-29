@@ -21,8 +21,61 @@ const TABS = {
 
 let _currentTab = null;
 
+function ensureUserName() {
+  return new Promise(resolve => {
+    const saved = (localStorage.getItem('ic_user') || '').trim();
+    if (saved) { resolve(); return; }
+
+    const el = document.createElement('div');
+    el.id = 'welcome-overlay';
+    el.style.setProperty('--tut-accent', '#0A84FF');
+    el.innerHTML = `
+      <div class="tut-slides">
+        <div class="tut-slide">
+          <div class="tut-icon-wrap"><span class="tut-icon">👤</span></div>
+          <div class="tut-title">¿Cómo te llamas?</div>
+          <div class="tut-body">Tu nombre quedará registrado en los exports de conteos, pedidos y albaranes.</div>
+          <input id="welcome-name" type="text" autocomplete="name" autocapitalize="words"
+            placeholder="Tu nombre…"
+            style="width:100%;background:var(--surface2);border-radius:14px;
+                   padding:14px 16px;color:var(--text);font-size:1rem;font-weight:600;
+                   text-align:center;margin-top:8px">
+        </div>
+      </div>
+      <div class="tut-footer">
+        <div></div>
+        <button id="welcome-ok" class="tut-next tut-next--last"
+          style="opacity:0.4" disabled>Continuar →</button>
+      </div>
+    `;
+    document.body.appendChild(el);
+
+    const inp = document.getElementById('welcome-name');
+    const btn = document.getElementById('welcome-ok');
+
+    inp.addEventListener('input', () => {
+      const ok = inp.value.trim().length > 0;
+      btn.disabled      = !ok;
+      btn.style.opacity = ok ? '1' : '0.4';
+    });
+
+    const confirm = () => {
+      const name = inp.value.trim();
+      if (!name) return;
+      localStorage.setItem('ic_user', name);
+      el.classList.add('tut-exit');
+      setTimeout(() => { el.remove(); resolve(); }, 300);
+    };
+
+    btn.addEventListener('click', confirm);
+    inp.addEventListener('keydown', e => { if (e.key === 'Enter') confirm(); });
+    setTimeout(() => inp.focus(), 100);
+  });
+}
+
 async function init() {
   await openDB();
+  await ensureUserName();
   await loadEansExtra();
 
   const products = await getAllProducts();
