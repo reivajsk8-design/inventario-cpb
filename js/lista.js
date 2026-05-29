@@ -30,6 +30,13 @@ function getCounts() { return JSON.parse(localStorage.getItem('ic') || '{}'); }
 function saveCounts(c) { localStorage.setItem('ic', JSON.stringify(c)); }
 function getOrders()  { return JSON.parse(localStorage.getItem('io') || '{}'); }
 function saveOrders(o){ localStorage.setItem('io', JSON.stringify(o)); }
+function getZona()    { return localStorage.getItem('ic_zona') || 'almacen'; }
+function setZona(z)   { localStorage.setItem('ic_zona', z); }
+function totalQty(c) {
+  if (!c) return 0;
+  if ('almacen' in c || 'tienda' in c) return (c.almacen || 0) + (c.tienda || 0);
+  return c.qty || 0;
+}
 
 export async function mount() {
   _rawAll = await getAllProducts();
@@ -205,7 +212,7 @@ function alcoholBadges(alc) {
 function prodHTML(p, editOvr) {
   const counts  = getCounts();
   const orders  = getOrders();
-  const counted = counts[p.ref]?.qty;
+  const counted = counts[p.ref] ? (totalQty(counts[p.ref]) || null) : null;
   const ordered = (orders[p.ref] || 0) > 0 ? orders[p.ref] : null;
   const edited  = editOvr[p.ref] && Object.keys(editOvr[p.ref]).length > 0;
   const alc     = parseAlcohol(p.name);
@@ -258,7 +265,7 @@ function openProductSheet(ref) {
     const orders   = getOrders();
     const editOvr  = JSON.parse(localStorage.getItem('ie') || '{}');
     const hasEdits = editOvr[ref] && Object.keys(editOvr[ref]).length > 0;
-    const curCount = counts[ref]?.qty;
+    const curCount = totalQty(counts[ref]) || null;
     const curOrder = (orders[ref] || 0) > 0 ? orders[ref] : null;
 
     openSheet(`
@@ -288,6 +295,15 @@ function openProductSheet(ref) {
         </button>
       </div>
 
+      ${mode === 'conteo' ? `
+      <div style="display:flex;gap:8px;margin-bottom:10px">
+        <button id="zona-alm" style="flex:1;padding:8px;border-radius:20px;font-size:0.78rem;font-weight:700;
+          background:${getZona()==='almacen' ? 'var(--accent)' : 'var(--surface2)'};
+          color:${getZona()==='almacen' ? '#fff' : 'var(--text3)'}">🏪 Almacén</button>
+        <button id="zona-tie" style="flex:1;padding:8px;border-radius:20px;font-size:0.78rem;font-weight:700;
+          background:${getZona()==='tienda' ? 'var(--accent)' : 'var(--surface2)'};
+          color:${getZona()==='tienda' ? '#fff' : 'var(--text3)'}">🏬 Tienda</button>
+      </div>` : ''}
       <div class="qty-label" style="margin-bottom:8px">
         ${mode === 'conteo' ? 'Añadir al conteo' : 'Añadir al pedido'}
       </div>
@@ -319,6 +335,19 @@ function openProductSheet(ref) {
       _mode = 'pedido'; localStorage.setItem('il_mode', _mode); render(_mode);
     });
 
+    if (mode === 'conteo') {
+      const zonaAlm = document.getElementById('zona-alm');
+      const zonaTie = document.getElementById('zona-tie');
+      const updateZonaBtns = (zona) => {
+        zonaAlm.style.background = zona === 'almacen' ? 'var(--accent)' : 'var(--surface2)';
+        zonaAlm.style.color      = zona === 'almacen' ? '#fff' : 'var(--text3)';
+        zonaTie.style.background = zona === 'tienda'  ? 'var(--accent)' : 'var(--surface2)';
+        zonaTie.style.color      = zona === 'tienda'  ? '#fff' : 'var(--text3)';
+      };
+      zonaAlm.addEventListener('click', () => { setZona('almacen'); updateZonaBtns('almacen'); });
+      zonaTie.addEventListener('click', () => { setZona('tienda');  updateZonaBtns('tienda');  });
+    }
+
     document.querySelectorAll('.quick-qty').forEach(btn => {
       btn.addEventListener('click', () => doAdd(parseInt(btn.dataset.n)));
     });
@@ -335,9 +364,15 @@ function openProductSheet(ref) {
   function doAdd(qty) {
     if (_mode === 'conteo') {
       const counts = getCounts();
-      counts[ref] = { qty: (counts[ref]?.qty || 0) + qty, notes: counts[ref]?.notes || '' };
+      const zona   = getZona();
+      const c      = counts[ref] || { almacen: 0, tienda: 0, notes: '' };
+      if ('qty' in c && !('almacen' in c)) {
+        c.almacen = c.qty || 0; c.tienda = 0; delete c.qty;
+      }
+      c[zona] = (c[zona] || 0) + qty;
+      counts[ref] = c;
       saveCounts(counts);
-      toast(`${p.name} — ${counts[ref].qty} ud. en conteo`, 'green');
+      toast(`${p.name} — ${totalQty(counts[ref])} ud. en conteo`, 'green');
     } else {
       const orders = getOrders();
       orders[ref] = (orders[ref] || 0) + qty;
