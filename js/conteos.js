@@ -159,8 +159,9 @@ function renderList() {
   const more          = items.length > page.length;
   const totalContados = Object.keys(counts).filter(r => totalQty(counts[r]) > 0).length;
 
-  if (items.length === 0) {
-    main.innerHTML = !hasFilter && contados.length === 0
+  // Sin conteos y sin stock → empty state inmediato
+  if (items.length === 0 && !stockLoaded) {
+    main.innerHTML = !hasFilter
       ? `<div class="empty-state">
            <div class="icon">🔢</div>
            <p style="font-weight:700;color:var(--text)">Sin conteos todavía</p>
@@ -171,13 +172,21 @@ function renderList() {
   }
 
   let stockBannerHTML = '';
+  let sinContarHTML   = '';
   if (stockLoaded) {
     let cuadrados = 0, diffs = 0, pending = 0;
+    const sinContarItems = [];
     Object.entries(stock).forEach(([ref, sysQty]) => {
       const tot = totalQty(counts[ref]);
-      if (!tot)                pending++;
-      else if (tot === sysQty) cuadrados++;
-      else                     diffs++;
+      if (!tot) {
+        pending++;
+        const prod = _all.find(x => x.ref === ref);
+        sinContarItems.push({ ref, sysQty, name: prod?.name || ref, family: prod?.family || '' });
+      } else if (tot === sysQty) {
+        cuadrados++;
+      } else {
+        diffs++;
+      }
     });
     stockBannerHTML = `
       <div class="stock-banner">
@@ -187,6 +196,48 @@ function renderList() {
         <span class="stock-banner-sep">·</span>
         <span class="stock-banner-item pend">◯ ${pending} sin contar</span>
       </div>`;
+    if (sinContarItems.length > 0 && !hasFilter) {
+      const shown = sinContarItems.slice(0, 20);
+      sinContarHTML = `
+        <div style="padding:12px 12px 4px;font-size:0.65rem;color:var(--text3)">
+          ◯ Sin contar del sistema (${sinContarItems.length})
+        </div>
+        <div class="prod-list" style="margin-bottom:12px">
+          ${shown.map(item => `
+            <div class="prod-item sin-contar-item" data-ref="${item.ref}" style="opacity:0.7">
+              <div style="flex:1;min-width:0">
+                <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-bottom:4px">
+                  <span class="prod-tag tag-ref">${item.ref}</span>
+                  <div class="prod-name" style="flex:1;min-width:80px">${item.name}</div>
+                </div>
+                ${item.family ? `<div><span class="prod-tag tag-family">${item.family}</span></div>` : ''}
+              </div>
+              <div class="stock-cmp stock-pending">${item.sysQty}<small>en sistema</small></div>
+            </div>`).join('')}
+          ${sinContarItems.length > 20
+            ? `<div style="padding:10px 14px;font-size:0.68rem;color:var(--text3);text-align:center">
+                 + ${sinContarItems.length - 20} artículos más sin contar
+               </div>`
+            : ''}
+        </div>`;
+    }
+  }
+
+  // Sin conteos pero sí hay stock → mostrar solo info de stock
+  if (items.length === 0) {
+    main.innerHTML = `
+      <div style="padding:10px 12px 4px;font-size:0.65rem;color:var(--text3)">
+        📡 Escanea con la pistola o toca un artículo · <strong style="color:var(--green)">${totalContados} contados</strong>
+      </div>
+      ${stockBannerHTML}
+      ${sinContarHTML}`;
+    main.querySelectorAll('.sin-contar-item[data-ref]').forEach(el => {
+      el.addEventListener('click', () => {
+        const p = _all.find(x => x.ref === el.dataset.ref);
+        if (p) addQty(p);
+      });
+    });
+    return;
   }
 
   main.innerHTML = `
@@ -241,9 +292,10 @@ function renderList() {
         </div>`;
       }).join('')}
       ${more ? `<button id="btn-more" style="display:block;width:100%;padding:14px;color:var(--accent);font-size:0.82rem;font-weight:700;text-align:center">Ver más (${items.length - page.length})</button>` : ''}
-    </div>`;
+    </div>
+    ${sinContarHTML}`;
 
-  main.querySelectorAll('.prod-item').forEach(el => {
+  main.querySelectorAll('.prod-item[data-ref], .sin-contar-item[data-ref]').forEach(el => {
     el.addEventListener('click', () => {
       const p = _all.find(x => x.ref === el.dataset.ref);
       if (p) addQty(p);
