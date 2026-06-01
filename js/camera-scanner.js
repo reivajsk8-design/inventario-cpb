@@ -4,7 +4,15 @@ let _af       = null;
 let _scanning = false;
 let _detector = null;
 let _onEan    = null;
-let _ctx      = null;
+let _ctx      = null;      // AudioContext de la cámara
+let _soundCtx = null;      // AudioContext persistente para sonidos sin cámara
+
+function _getSoundCtx() {
+  if (!_soundCtx || _soundCtx.state === 'closed') {
+    _soundCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  return _soundCtx;
+}
 
 function _beep() {
   try {
@@ -14,33 +22,37 @@ function _beep() {
     osc.connect(gain);
     gain.connect(_ctx.destination);
     osc.frequency.value = 1760;
-    gain.gain.setValueAtTime(0.3, _ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, _ctx.currentTime + 0.12);
-    osc.start(_ctx.currentTime);
-    osc.stop(_ctx.currentTime + 0.12);
+    const t = _ctx.currentTime;
+    gain.gain.setValueAtTime(0.3, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+    osc.start(t);
+    osc.stop(t + 0.12);
   } catch {}
 }
 
 // Arpegio estilo 1-up de Mario: G5 C6 E6 G6 E6 G6
 export function beepMatch() {
   try {
-    const ctx   = new (window.AudioContext || window.webkitAudioContext)();
-    const notes = [784, 1047, 1319, 1568, 1319, 1568];
-    const step  = 0.09;
-    notes.forEach((freq, i) => {
-      const osc  = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.type            = 'square';
-      osc.frequency.value = freq;
-      const t = ctx.currentTime + i * step;
-      gain.gain.setValueAtTime(0.18, t);
-      gain.gain.exponentialRampToValueAtTime(0.001, t + step * 0.85);
-      osc.start(t);
-      osc.stop(t + step);
-    });
-    setTimeout(() => ctx.close(), (notes.length + 2) * step * 1000);
+    const ctx  = _ctx || _getSoundCtx();
+    const play = () => {
+      const notes = [784, 1047, 1319, 1568, 1319, 1568];
+      const step  = 0.09;
+      const t0    = ctx.currentTime + 0.02;
+      notes.forEach((freq, i) => {
+        const osc  = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.type            = 'square';
+        osc.frequency.value = freq;
+        const t = t0 + i * step;
+        gain.gain.setValueAtTime(0.18, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + step * 0.85);
+        osc.start(t);
+        osc.stop(t + step);
+      });
+    };
+    ctx.state === 'running' ? play() : ctx.resume().then(play);
   } catch {}
 }
 
