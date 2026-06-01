@@ -160,7 +160,7 @@
 .sheet-overlay {
   position: fixed; inset: 0;
   background: rgba(0,0,0,0.55);
-  z-index: 50;
+  z-index: 110;
   display: flex; flex-direction: column; justify-content: flex-end;
 }
 .sheet-overlay.hidden { display: none; }
@@ -468,3 +468,46 @@
   background: var(--accent);
 }
 .tut-next--last { background: var(--green); }
+
+/* ── CAMERA SCANNER ── */
+#cam-scanner-overlay {
+  position: fixed; inset: 0; background: #000; z-index: 100;
+  display: flex; flex-direction: column;
+}
+#cam-scanner-overlay.hidden { display: none; }
+#cam-scanner-video { flex: 1; object-fit: cover; width: 100%; }
+.cam-ui {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  pointer-events: none;
+}
+.cam-reticle {
+  width: 270px; height: 150px;
+  border: 2.5px solid var(--accent); border-radius: 14px;
+  box-shadow: 0 0 0 9999px rgba(0,0,0,0.52);
+}
+.cam-hint {
+  position: absolute; bottom: calc(100px + env(safe-area-inset-bottom));
+  font-size: 0.8rem; color: rgba(255,255,255,0.75); font-weight: 600;
+}
+.cam-close {
+  position: absolute;
+  top: max(16px, env(safe-area-inset-top)); right: 16px;
+  background: rgba(28,28,30,0.85); backdrop-filter: blur(10px);
+  border-radius: 50%; width: 44px; height: 44px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.1rem; color: var(--text); pointer-events: auto; cursor: pointer;
+}
+.cam-no-detect {
+  position: absolute; bottom: max(24px, env(safe-area-inset-bottom));
+  left: 20px; right: 20px;
+  background: rgba(28,28,30,0.9); border-radius: 12px;
+  padding: 14px; text-align: center; font-size: 0.78rem; color: var(--amber);
+  line-height: 1.5; pointer-events: none;
+}
+.cam-zona-label {
+  position: absolute; top: max(20px, env(safe-area-inset-top)); left: 16px;
+  font-size: 0.72rem; font-weight: 700;
+  background: rgba(28,28,30,0.85); backdrop-filter: blur(10px);
+  border-radius: 20px; padding: 6px 14px; color: var(--text);
+}

@@ -5,11 +5,13 @@ import { openCountSheet, openSheet, closeSheet, toast } from './ui.js';
 import { startScanner }                                      from './scanner.js';
 import { getStock, saveStock, clearStock, parseStockXLSX }  from './stock.js';
 import { matchesEan, openAssignEanSheet }                    from './eans.js';
+import { cameraSupported, openCamera, closeCamera, resumeCamera } from './camera-scanner.js';
 
 const QUICK_QTYS = [1, 5, 10, 20];
 const PAGE = 50;
 let _all = [], _page = 0, _filterBar = null;
 let _query = '', _filterType = 'all', _activeFamilies = [];
+let _onCam = null;
 
 function getZona()  { return localStorage.getItem('ic_zona') || 'almacen'; }
 function setZona(z) { localStorage.setItem('ic_zona', z); }
@@ -38,19 +40,24 @@ function getCounts() {
 
 function saveCounts(c) { localStorage.setItem('ic', JSON.stringify(c)); }
 
-function renderZoneBar(el) {
-  const zona = getZona();
+function renderZoneBar(el, onCam) {
+  const zona   = getZona();
+  const camBtn = cameraSupported()
+    ? `<button id="btn-cam-open" class="zona-btn" style="flex:0;min-width:46px;padding:8px 12px;font-size:1.1rem" title="Escanear con cámara">📷</button>`
+    : '';
   el.innerHTML = `
     <div class="zona-bar">
       <button class="zona-btn ${zona === 'almacen' ? 'active' : ''}" data-zona="almacen">🏪 Almacén</button>
       <button class="zona-btn ${zona === 'tienda'  ? 'active' : ''}" data-zona="tienda">🏬 Tienda</button>
+      ${camBtn}
     </div>`;
-  el.querySelectorAll('.zona-btn').forEach(btn => {
+  el.querySelectorAll('.zona-btn[data-zona]').forEach(btn => {
     btn.addEventListener('click', () => {
       setZona(btn.dataset.zona);
-      renderZoneBar(el);
+      renderZoneBar(el, onCam);
     });
   });
+  if (onCam) document.getElementById('btn-cam-open')?.addEventListener('click', onCam);
 }
 
 export async function mount() {
@@ -76,8 +83,27 @@ export async function mount() {
     zoneBar.id = 'conteos-zone-bar';
     document.getElementById('nav').appendChild(zoneBar);
   }
-  renderZoneBar(zoneBar);
 
+  const onCamScan = ean => {
+    const p = _all.find(x => matchesEan(x, ean));
+    if (!p) {
+      openAssignEanSheet(ean, _all, product => addQty(product, () => resumeCamera()));
+      return;
+    }
+    addQty(p, () => resumeCamera());
+  };
+
+  const openCam = () => {
+    const zona = getZona();
+    document.querySelector('#cam-scanner-overlay .cam-hint').textContent =
+      (zona === 'almacen' ? '🏪 Almacén' : '🏬 Tienda') + ' · Enfoca el código de barras';
+    openCamera(onCamScan, toast);
+  };
+  _onCam = openCam;
+
+  document.getElementById('btn-cam-close').addEventListener('click', () => closeCamera());
+
+  renderZoneBar(zoneBar, openCam);
   renderList();
 
   startScanner(ean => {
@@ -88,6 +114,7 @@ export async function mount() {
 }
 
 export function unmount() {
+  closeCamera();
   if (_filterBar) _filterBar.hide();
   const navBtn = document.getElementById('btn-nav-right');
   navBtn.textContent = '?';
@@ -96,7 +123,7 @@ export function unmount() {
   if (zoneBar) zoneBar.remove();
 }
 
-function addQty(p) {
+function addQty(p, onDone = null) {
   openCountSheet(p, getCounts(), getZona(), QUICK_QTYS, (result) => {
     const all = getCounts();
     const c   = all[p.ref] || { almacen: 0, tienda: 0, notes: '' };
@@ -106,7 +133,7 @@ function addQty(p) {
       c.ts = Date.now();
       setZona(result.zona);
       const zoneBar = document.getElementById('conteos-zone-bar');
-      if (zoneBar) renderZoneBar(zoneBar);
+      if (zoneBar) renderZoneBar(zoneBar, _onCam);
     } else if (result.type === 'correct') {
       c.almacen = result.almacen;
       c.tienda  = result.tienda;
@@ -132,10 +159,11 @@ function addQty(p) {
       toast(`${p.name} — puesto a 0`, 'amber');
     }
     renderList();
+    if (onDone) onDone();
   }, (newZona) => {
     setZona(newZona);
     const zoneBar = document.getElementById('conteos-zone-bar');
-    if (zoneBar) renderZoneBar(zoneBar);
+    if (zoneBar) renderZoneBar(zoneBar, _onCam);
   });
 }
 

@@ -60,6 +60,19 @@
 <!-- Toast -->
 <div id="toast" class="toast hidden"></div>
 
+<!-- Camera Scanner overlay -->
+<div id="cam-scanner-overlay" class="hidden">
+  <video id="cam-scanner-video" autoplay playsinline muted></video>
+  <div class="cam-ui">
+    <div class="cam-reticle"></div>
+  </div>
+  <div class="cam-hint">Enfoca el código de barras</div>
+  <div id="cam-scanner-no-detect" class="cam-no-detect hidden">
+    BarcodeDetector no disponible en este navegador.<br>Usa Chrome en Android o la pistola de escaneo.
+  </div>
+  <button class="cam-close" id="btn-cam-close">✕</button>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
 <script type="module" src="js/app.js"></script>
 <script>
