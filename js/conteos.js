@@ -5,7 +5,7 @@ import { openCountSheet, openSheet, closeSheet, toast } from './ui.js';
 import { startScanner }                                      from './scanner.js';
 import { getStock, saveStock, clearStock, parseStockXLSX }  from './stock.js';
 import { matchesEan, openAssignEanSheet }                    from './eans.js';
-import { cameraSupported, openCamera, closeCamera, resumeCamera } from './camera-scanner.js';
+import { cameraSupported, openCamera, closeCamera, resumeCamera, beepMatch } from './camera-scanner.js';
 
 const QUICK_QTYS = [1, 5, 10, 20];
 const PAGE = 50;
@@ -151,10 +151,15 @@ function addQty(p, onDone = null) {
     }
     saveCounts(all);
 
+    const sysQty = getStock()[p.ref];
+    const cuadra = sysQty !== undefined && tot === sysQty && tot > 0;
+
     if (result.type === 'add') {
-      toast(`${p.name} — ${tot} ud. total`, 'green');
+      if (cuadra) beepMatch();
+      toast(cuadra ? `✓ ${p.name} — cuadra con sistema (${tot} uds)` : `${p.name} — ${tot} ud. total`, cuadra ? 'green' : 'green');
     } else if (result.type === 'correct') {
-      toast('Conteo corregido', 'green');
+      if (cuadra) beepMatch();
+      toast(cuadra ? `✓ Conteo corregido — cuadra con sistema (${tot} uds)` : 'Conteo corregido', 'green');
     } else {
       toast(`${p.name} — puesto a 0`, 'amber');
     }

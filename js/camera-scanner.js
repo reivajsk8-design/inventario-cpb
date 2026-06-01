@@ -21,6 +21,29 @@ function _beep() {
   } catch {}
 }
 
+// Arpegio estilo 1-up de Mario: G5 C6 E6 G6 E6 G6
+export function beepMatch() {
+  try {
+    const ctx   = new (window.AudioContext || window.webkitAudioContext)();
+    const notes = [784, 1047, 1319, 1568, 1319, 1568];
+    const step  = 0.09;
+    notes.forEach((freq, i) => {
+      const osc  = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.type            = 'square';
+      osc.frequency.value = freq;
+      const t = ctx.currentTime + i * step;
+      gain.gain.setValueAtTime(0.18, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + step * 0.85);
+      osc.start(t);
+      osc.stop(t + step);
+    });
+    setTimeout(() => ctx.close(), (notes.length + 2) * step * 1000);
+  } catch {}
+}
+
 export function cameraSupported() {
   return !!(navigator.mediaDevices?.getUserMedia && 'BarcodeDetector' in window);
 }
