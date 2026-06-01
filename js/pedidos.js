@@ -4,6 +4,7 @@ import { filterProducts, mountFilterBar } from './filters.js';
 import { openSheet, closeSheet, openQtySheet, toast } from './ui.js';
 import { startScanner }                  from './scanner.js';
 import { matchesEan, openAssignEanSheet } from './eans.js';
+import { cameraSupported, openCamera, closeCamera, resumeCamera } from './camera-scanner.js';
 
 const QUICK_QTYS = [6, 12, 24, 48];
 const TERMINALS  = ['D', 'MSC', 'E'];
@@ -17,6 +18,7 @@ const TERM_COLORS = {
 
 let _all = [], _page = 0, _filterBar = null;
 let _query = '', _filterType = 'all', _activeFamilies = [];
+let _onCam = null;
 
 function getOrders()    { return JSON.parse(localStorage.getItem('io') || '{}'); }
 function saveOrders(o)  { localStorage.setItem('io', JSON.stringify(o)); }
@@ -36,6 +38,23 @@ export async function mount() {
     renderList();
   });
 
+  const navBtn = document.getElementById('btn-nav-right');
+  if (cameraSupported()) {
+    navBtn.textContent = '📷';
+    navBtn.onclick = () => _onCam && _onCam();
+  }
+
+  const onCamScan = ean => {
+    const p = _all.find(x => matchesEan(x, ean));
+    if (!p) { openAssignEanSheet(ean, _all, product => addOrder(product, () => resumeCamera())); return; }
+    addOrder(p, () => resumeCamera());
+  };
+
+  const openCam = () => openCamera(onCamScan, toast);
+  _onCam = openCam;
+
+  document.getElementById('btn-cam-close').addEventListener('click', () => closeCamera());
+
   renderList();
 
   startScanner(ean => {
@@ -46,16 +65,22 @@ export async function mount() {
 }
 
 export function unmount() {
+  closeCamera();
+  _onCam = null;
   if (_filterBar) _filterBar.hide();
+  const navBtn = document.getElementById('btn-nav-right');
+  navBtn.textContent = '?';
+  navBtn.onclick = navBtn._tutorialHandler || null;
 }
 
-function addOrder(p) {
+function addOrder(p, onDone = null) {
   openQtySheet(p, QUICK_QTYS, 'Pedir ×{n} unidades', qty => {
     const orders = getOrders();
     orders[p.ref] = (orders[p.ref] || 0) + qty;
     saveOrders(orders);
     toast(`${p.name} — ${orders[p.ref]} ud. en pedido`, 'green');
     renderList();
+    if (onDone) onDone();
   });
 }
 
@@ -171,7 +196,7 @@ function renderList() {
       <strong style="color:var(--accent)">${pedidos.length} refs</strong> · ${totalUnits} uds
     </div>
     <div style="padding:0 12px 4px;font-size:0.65rem;color:var(--text3)">
-      📡 Escanea para añadir · toca para editar cantidad
+      📡${cameraSupported() ? ' · 📷' : ''} Escanea para añadir · toca para editar cantidad
     </div>
     ${items.length === 0
       ? (!hasFilter
