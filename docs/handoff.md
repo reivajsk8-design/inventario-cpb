@@ -10,7 +10,7 @@ A mobile-first PWA for stock counting and order management in a glasses/accessor
 
 **Deployed at:** `https://reivajsk8-design.github.io/inventario-cpb/`  
 **Git root:** `C:\Inventario CPB\`  
-**Service Worker:** `cpb-v47`  
+**Service Worker:** `cpb-v51`  
 **DB version:** `2026-06-01b` — 11,485 articles  
 **Branch:** `main` (only branch, GitHub Pages deploys from here)
 
@@ -31,6 +31,9 @@ A mobile-first PWA for stock counting and order management in a glasses/accessor
 | DB: merged 7 duplicate ref pairs, removed -1 suffix from 24 refs | ✅ |
 | SVG icons in tab bar (Heroicons v2 MIT, inline) | ✅ |
 | Differentiated scan icons: viewfinder (pistol) vs camera (mobile) | ✅ |
+| Fix: camera auto-resumes after dismissing any sheet (EAN not found, or close without confirming) | ✅ |
+| Notes per article in Conteos: toggle button → textarea, amber indicator in list, column in Excel export | ✅ |
+| Notes auto-save on panel close without confirming count (only if article already has a count) | ✅ |
 
 ### Architecture notes
 
@@ -42,7 +45,7 @@ A mobile-first PWA for stock counting and order management in a glasses/accessor
   - `_ctx` = AudioContext created during openCamera() (user gesture)
   - `_soundCtx` = persistent AudioContext for sounds without camera (uses `resume()` before scheduling)
   - Camera only works in Chrome/Edge on Android and Desktop — NOT on any iOS browser
-- `js/ui.js` — `openCountSheet`, `openSheet`, `closeSheet`, `toast`
+- `js/ui.js` — `openCountSheet(product, counts, zona, quickQtys, onResult, onZonaChange, onClose, notes='')`, `openSheet`, `closeSheet`, `toast`
 - `js/eans.js` — EAN assignment sheet (fixed: input created once, only results div updates)
 - `js/filters.js` — filter bar with viewfinder-circle SVG for scan button
 - `js/resumen.js` — Resumen tab, user name display + change
@@ -68,7 +71,7 @@ A mobile-first PWA for stock counting and order management in a glasses/accessor
 
 ## Files actively edited
 
-All changes are committed and pushed. No dirty state. Last commit: `ccf6826` (SW v47).
+All changes are committed and pushed. No dirty state. Last commit: `047c0b1` (SW v51).
 
 ---
 
@@ -92,7 +95,6 @@ All changes are committed and pushed. No dirty state. Last commit: `ccf6826` (SW
 - **Resolve 6 conflicting -1 refs**: user needs to check in PROXIUM which article is correct for each conflicting pair, then rename or merge.
 
 ### Feature backlog
-- **Notes UI for conteos** — `notes` field is stored in `ic` but no UI to add/view it in the count sheet
 - **Independent reset** — separate "reset counts" from "reset orders" (currently one action clears both)
 - **"Pendiente" state in Albaranes** — albaranes can be marked pending before being received
 - **PDF export of albaranes list** — export received albaranes to PDF
