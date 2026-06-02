@@ -5,7 +5,7 @@ import { openCountSheet, openSheet, closeSheet, toast } from './ui.js';
 import { startScanner }                                      from './scanner.js';
 import { getStock, saveStock, clearStock, parseStockXLSX }  from './stock.js';
 import { matchesEan, openAssignEanSheet }                    from './eans.js';
-import { cameraSupported, openCamera, closeCamera, resumeCamera, beepMatch } from './camera-scanner.js';
+import { cameraSupported, openCamera, closeCamera, resumeCamera, beepMatch, beepError } from './camera-scanner.js';
 
 const QUICK_QTYS = [1, 5, 10, 20];
 const PAGE = 50;
@@ -87,6 +87,7 @@ export async function mount() {
   const onCamScan = ean => {
     const p = _all.find(x => matchesEan(x, ean));
     if (!p) {
+      beepError();
       openAssignEanSheet(ean, _all, product => addQty(product, () => resumeCamera()));
       return;
     }
@@ -108,7 +109,7 @@ export async function mount() {
 
   startScanner(ean => {
     const p = _all.find(x => matchesEan(x, ean));
-    if (!p) { openAssignEanSheet(ean, _all, product => addQty(product)); return; }
+    if (!p) { beepError(); openAssignEanSheet(ean, _all, product => addQty(product)); return; }
     addQty(p);
   });
 }

@@ -4,7 +4,7 @@ import { filterProducts, mountFilterBar } from './filters.js';
 import { openSheet, closeSheet, openQtySheet, toast } from './ui.js';
 import { startScanner }                  from './scanner.js';
 import { matchesEan, openAssignEanSheet } from './eans.js';
-import { cameraSupported, openCamera, closeCamera, resumeCamera } from './camera-scanner.js';
+import { cameraSupported, openCamera, closeCamera, resumeCamera, beepError } from './camera-scanner.js';
 
 const QUICK_QTYS = [6, 12, 24, 48];
 const TERMINALS  = ['D', 'MSC', 'E'];
@@ -46,7 +46,7 @@ export async function mount() {
 
   const onCamScan = ean => {
     const p = _all.find(x => matchesEan(x, ean));
-    if (!p) { openAssignEanSheet(ean, _all, product => addOrder(product, () => resumeCamera())); return; }
+    if (!p) { beepError(); openAssignEanSheet(ean, _all, product => addOrder(product, () => resumeCamera())); return; }
     addOrder(p, () => resumeCamera());
   };
 
@@ -59,7 +59,7 @@ export async function mount() {
 
   startScanner(ean => {
     const p = _all.find(x => matchesEan(x, ean));
-    if (!p) { openAssignEanSheet(ean, _all, product => addOrder(product)); return; }
+    if (!p) { beepError(); openAssignEanSheet(ean, _all, product => addOrder(product)); return; }
     addOrder(p);
   });
 }

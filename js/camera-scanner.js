@@ -30,6 +30,29 @@ function _beep() {
   } catch {}
 }
 
+// Dos notas descendentes: sonido de error / no encontrado
+export function beepError() {
+  try {
+    const ctx  = _ctx || _getSoundCtx();
+    const play = () => {
+      [[520, 0], [260, 0.1]].forEach(([freq, offset]) => {
+        const osc  = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.type            = 'square';
+        osc.frequency.value = freq;
+        const t = ctx.currentTime + 0.02 + offset;
+        gain.gain.setValueAtTime(0.2, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.09);
+        osc.start(t);
+        osc.stop(t + 0.1);
+      });
+    };
+    ctx.state === 'running' ? play() : ctx.resume().then(play);
+  } catch {}
+}
+
 // Arpegio estilo 1-up de Mario: G5 C6 E6 G6 E6 G6
 export function beepMatch() {
   try {
