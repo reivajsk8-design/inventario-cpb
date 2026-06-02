@@ -200,7 +200,7 @@ function renderList() {
       <strong style="color:var(--accent)">${pedidos.length} refs</strong> · ${totalUnits} uds
     </div>
     <div style="padding:0 12px 4px;font-size:0.65rem;color:var(--text3)">
-      📡${cameraSupported() ? ' · 📷' : ''} Escanea para añadir · toca para editar cantidad
+      📡 Escanea para añadir · toca para editar cantidad
     </div>
     ${items.length === 0
       ? (!hasFilter

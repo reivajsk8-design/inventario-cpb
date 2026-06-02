@@ -66,7 +66,7 @@
 }
 .search-input-wrap input::placeholder { color: var(--text3); }
 .search-icon { color: var(--text3); font-size: 0.9rem; flex-shrink: 0; }
-.search-scan  { font-size: 1rem; flex-shrink: 0; cursor: pointer; }
+.search-scan  { display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; cursor:pointer; color:var(--text3); }
 
 .filter-type-tabs {
   display: flex;
