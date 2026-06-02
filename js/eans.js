@@ -72,7 +72,7 @@ export function exportEansJSON() {
   return JSON.stringify(merged, null, 2);
 }
 
-export function openAssignEanSheet(ean, products, onAssigned) {
+export function openAssignEanSheet(ean, products, onAssigned, onClose) {
   let query = '';
 
   const renderResults = () => {
@@ -126,7 +126,7 @@ export function openAssignEanSheet(ean, products, onAssigned) {
     <div id="assign-results">
       <div style="text-align:center;padding:24px;color:var(--text3);font-size:0.82rem">Escribe para buscar</div>
     </div>
-  `);
+  `, onClose);
 
   const inp = document.getElementById('assign-q');
   inp.addEventListener('input', e => {

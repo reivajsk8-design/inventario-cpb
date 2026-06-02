@@ -116,7 +116,7 @@ export function openQtySheet(product, quickQtys, actionLabel, onConfirm) {
   document.getElementById('np-add').addEventListener('click', confirm);
 }
 
-export function openCountSheet(product, counts, zona, quickQtys, onResult, onZonaChange) {
+export function openCountSheet(product, counts, zona, quickQtys, onResult, onZonaChange, onClose) {
   const c   = counts[product.ref];
   const alm = c?.almacen ?? 0;
   const tie = c?.tienda  ?? 0;
@@ -192,7 +192,7 @@ export function openCountSheet(product, counts, zona, quickQtys, onResult, onZon
       </button>` : ''}`;
   }
 
-  const close = openSheet(addModeHTML());
+  const close = openSheet(addModeHTML(), onClose);
 
   function updateZonaBtns() {
     document.querySelectorAll('#cs-zona-row [data-zona]').forEach(btn => {

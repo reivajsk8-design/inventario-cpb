@@ -132,7 +132,7 @@ async function _loop(video) {
 }
 
 export function resumeCamera() {
-  if (!_stream) return;
+  if (!_stream || _scanning) return;
   _scanning = true;
   const video = document.getElementById('cam-scanner-video');
   _loop(video);

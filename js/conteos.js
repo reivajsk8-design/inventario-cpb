@@ -93,7 +93,7 @@ export async function mount() {
     const p = _all.find(x => matchesEan(x, ean));
     if (!p) {
       beepError();
-      openAssignEanSheet(ean, _all, product => addQty(product, () => resumeCamera()));
+      openAssignEanSheet(ean, _all, product => addQty(product, () => resumeCamera()), () => resumeCamera());
       return;
     }
     addQty(p, () => resumeCamera());
@@ -175,7 +175,7 @@ function addQty(p, onDone = null) {
     setZona(newZona);
     const zoneBar = document.getElementById('conteos-zone-bar');
     if (zoneBar) renderZoneBar(zoneBar, _onCam);
-  });
+  }, onDone);
 }
 
 function renderList() {
