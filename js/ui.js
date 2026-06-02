@@ -116,7 +116,7 @@ export function openQtySheet(product, quickQtys, actionLabel, onConfirm) {
   document.getElementById('np-add').addEventListener('click', confirm);
 }
 
-export function openCountSheet(product, counts, zona, quickQtys, onResult, onZonaChange, onClose) {
+export function openCountSheet(product, counts, zona, quickQtys, onResult, onZonaChange, onClose, notes = '') {
   const c   = counts[product.ref];
   const alm = c?.almacen ?? 0;
   const tie = c?.tienda  ?? 0;
@@ -125,6 +125,7 @@ export function openCountSheet(product, counts, zona, quickQtys, onResult, onZon
   let _zona   = zona;
   let _qty    = quickQtys[0];
   let _manual = false;
+  let _notes  = notes;
 
   const avatar = (product.family || '?').slice(0, 2).toUpperCase();
 
@@ -189,7 +190,18 @@ export function openCountSheet(product, counts, zona, quickQtys, onResult, onZon
         width:100%;background:var(--surface2);border-radius:12px;padding:11px;
         color:var(--text2);font-size:0.78rem;font-weight:600;margin-top:6px">
         ✏️ Corregir conteos
-      </button>` : ''}`;
+      </button>` : ''}
+      ${_notes !== ''
+        ? `<textarea id="cs-notes" rows="2" placeholder="Nota sobre este conteo…"
+             style="width:100%;background:var(--surface2);border-radius:10px;
+                    padding:10px 12px;color:var(--text);font-size:0.82rem;
+                    border:none;resize:none;box-sizing:border-box;margin-top:8px"></textarea>`
+        : `<button id="cs-notes-toggle"
+             style="width:100%;background:var(--surface2);border-radius:10px;
+                    padding:10px 12px;color:var(--text3);font-size:0.82rem;
+                    font-weight:600;text-align:left;margin-top:8px">
+             📝 Añadir nota…
+           </button>`}`;
   }
 
   const close = openSheet(addModeHTML(), onClose);
@@ -212,7 +224,7 @@ export function openCountSheet(product, counts, zona, quickQtys, onResult, onZon
 
   function confirmAdd() {
     if (_qty <= 0) return;
-    onResult({ type: 'add', zona: _zona, qty: _qty });
+    onResult({ type: 'add', zona: _zona, qty: _qty, notes: _notes });
     close();
   }
 
@@ -249,7 +261,7 @@ export function openCountSheet(product, counts, zona, quickQtys, onResult, onZon
     document.getElementById('corr-save').addEventListener('click', () => {
       const newAlm = Math.max(0, parseInt(document.getElementById('corr-alm').value) || 0);
       const newTie = Math.max(0, parseInt(document.getElementById('corr-tie').value) || 0);
-      onResult({ type: 'correct', almacen: newAlm, tienda: newTie });
+      onResult({ type: 'correct', almacen: newAlm, tienda: newTie, notes: _notes });
       close();
     });
 
@@ -303,6 +315,22 @@ export function openCountSheet(product, counts, zona, quickQtys, onResult, onZon
 
     document.getElementById('np-add').addEventListener('click', confirmAdd);
     document.getElementById('cs-corregir')?.addEventListener('click', openCorrectMode);
+    const toggleBtn = document.getElementById('cs-notes-toggle');
+    toggleBtn?.addEventListener('click', () => {
+      const ta  = document.createElement('textarea');
+      ta.id   = 'cs-notes';
+      ta.rows = 2;
+      ta.placeholder = 'Nota sobre este conteo…';
+      ta.style.cssText = 'width:100%;background:var(--surface2);border-radius:10px;' +
+        'padding:10px 12px;color:var(--text);font-size:0.82rem;' +
+        'border:none;resize:none;box-sizing:border-box;margin-top:8px';
+      toggleBtn.replaceWith(ta);
+      ta.addEventListener('input', e => { _notes = e.target.value; });
+      ta.focus();
+    });
+    const csNotesEl = document.getElementById('cs-notes');
+    if (csNotesEl) csNotesEl.value = _notes;
+    document.getElementById('cs-notes')?.addEventListener('input', e => { _notes = e.target.value; });
   }
 
   wireAddMode();

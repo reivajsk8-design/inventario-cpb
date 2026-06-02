@@ -136,17 +136,20 @@ function addQty(p, onDone = null) {
 
     if (result.type === 'add') {
       c[result.zona] = (c[result.zona] || 0) + result.qty;
-      c.ts = Date.now();
+      c.ts    = Date.now();
+      c.notes = result.notes ?? c.notes;
       setZona(result.zona);
       const zoneBar = document.getElementById('conteos-zone-bar');
       if (zoneBar) renderZoneBar(zoneBar, _onCam);
     } else if (result.type === 'correct') {
       c.almacen = result.almacen;
       c.tienda  = result.tienda;
-      c.ts = Date.now();
+      c.ts      = Date.now();
+      c.notes   = result.notes ?? c.notes;
     } else if (result.type === 'zero') {
       c.almacen = 0;
       c.tienda  = 0;
+      c.notes   = '';
     }
 
     const tot = (c.almacen || 0) + (c.tienda || 0);
@@ -175,7 +178,7 @@ function addQty(p, onDone = null) {
     setZona(newZona);
     const zoneBar = document.getElementById('conteos-zone-bar');
     if (zoneBar) renderZoneBar(zoneBar, _onCam);
-  }, onDone);
+  }, onDone, getCounts()[p.ref]?.notes || '');
 }
 
 function renderList() {
@@ -331,6 +334,7 @@ function renderList() {
               ${p.family ? `<span class="prod-tag tag-family">${p.family}</span>` : ''}
               ${p.ean ? `<span style="font-size:0.6rem;color:var(--text3)">▪ ${p.ean}</span>` : ''}
             </div>
+            ${c?.notes ? `<div style="font-size:0.7rem;color:var(--amber);font-style:italic;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px">📝 ${c.notes.length > 60 ? c.notes.slice(0, 60) + '…' : c.notes}</div>` : ''}
           </div>
           ${badge}
         </div>`;
@@ -510,10 +514,11 @@ function exportComparativa(stock, counts) {
       contado ?? '',
       contado !== null ? diff : '',
       estado,
+      counts[ref]?.notes || '',
     ];
   };
 
-  rows.push(['REF', 'Nombre', 'Familia', 'Stock sistema', 'Contado', 'Diferencia', 'Estado']);
+  rows.push(['REF', 'Nombre', 'Familia', 'Stock sistema', 'Contado', 'Diferencia', 'Estado', 'Notas']);
   diferencias.forEach(r => rows.push(toRow(r)));
   cuadrados.forEach(r   => rows.push(toRow(r)));
   sinContar.forEach(r   => rows.push(toRow(r)));
@@ -523,7 +528,7 @@ function exportComparativa(stock, counts) {
     const ws  = XLSX.utils.aoa_to_sheet(rows);
 
     // Ancho de columnas
-    ws['!cols'] = [{ wch: 14 }, { wch: 40 }, { wch: 16 }, { wch: 14 }, { wch: 10 }, { wch: 12 }, { wch: 14 }];
+    ws['!cols'] = [{ wch: 14 }, { wch: 40 }, { wch: 16 }, { wch: 14 }, { wch: 10 }, { wch: 12 }, { wch: 14 }, { wch: 30 }];
 
     XLSX.utils.book_append_sheet(wb, ws, 'Comparativa');
 
