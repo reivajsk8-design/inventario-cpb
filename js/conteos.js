@@ -130,7 +130,8 @@ export function unmount() {
 }
 
 function addQty(p, onDone = null) {
-  openCountSheet(p, getCounts(), getZona(), QUICK_QTYS, (result) => {
+  const curCounts = getCounts();
+  openCountSheet(p, curCounts, getZona(), QUICK_QTYS, (result) => {
     const all = getCounts();
     const c   = all[p.ref] || { almacen: 0, tienda: 0, notes: '' };
 
@@ -178,7 +179,7 @@ function addQty(p, onDone = null) {
     setZona(newZona);
     const zoneBar = document.getElementById('conteos-zone-bar');
     if (zoneBar) renderZoneBar(zoneBar, _onCam);
-  }, onDone, getCounts()[p.ref]?.notes || '');
+  }, onDone, curCounts[p.ref]?.notes || '');
 }
 
 function renderList() {
@@ -295,6 +296,10 @@ function renderList() {
     <div class="prod-list">
       ${page.map(p => {
         const c       = counts[p.ref];
+        const noteText = c?.notes
+          ? (c.notes.length > 60 ? c.notes.slice(0, 60) + '…' : c.notes)
+              .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+          : '';
         const tot     = totalQty(c);
         const counted = tot > 0;
         const alm     = c?.almacen ?? 0;
@@ -334,7 +339,7 @@ function renderList() {
               ${p.family ? `<span class="prod-tag tag-family">${p.family}</span>` : ''}
               ${p.ean ? `<span style="font-size:0.6rem;color:var(--text3)">▪ ${p.ean}</span>` : ''}
             </div>
-            ${c?.notes ? `<div style="font-size:0.7rem;color:var(--amber);font-style:italic;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px">📝 ${c.notes.length > 60 ? c.notes.slice(0, 60) + '…' : c.notes}</div>` : ''}
+            ${noteText ? `<div style="font-size:0.7rem;color:var(--amber);font-style:italic;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px">📝 ${noteText}</div>` : ''}
           </div>
           ${badge}
         </div>`;
