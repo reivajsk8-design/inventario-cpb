@@ -204,7 +204,7 @@ export function openCountSheet(product, counts, zona, quickQtys, onResult, onZon
            </button>`}`;
   }
 
-  const close = openSheet(addModeHTML(), onClose);
+  const close = openSheet(addModeHTML(), onClose ? () => onClose(_notes) : null);
 
   function updateZonaBtns() {
     document.querySelectorAll('#cs-zona-row [data-zona]').forEach(btn => {

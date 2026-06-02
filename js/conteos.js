@@ -179,7 +179,17 @@ function addQty(p, onDone = null) {
     setZona(newZona);
     const zoneBar = document.getElementById('conteos-zone-bar');
     if (zoneBar) renderZoneBar(zoneBar, _onCam);
-  }, onDone, curCounts[p.ref]?.notes || '');
+  }, (notes) => {
+    const all = getCounts();
+    const c   = all[p.ref];
+    if (c && notes !== (c.notes || '')) {
+      c.notes = notes;
+      all[p.ref] = c;
+      saveCounts(all);
+      renderList();
+    }
+    if (onDone) onDone();
+  }, curCounts[p.ref]?.notes || '');
 }
 
 function renderList() {
