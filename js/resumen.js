@@ -405,5 +405,5 @@ function openManageSheet() {
     ${iaSection}
   `);
 
-  wireManageSheet(confirmed, iaList);
+  wireManageSheet(confirmed);
 }
