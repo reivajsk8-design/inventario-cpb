@@ -275,6 +275,7 @@ function doExport(name, rows, terminal = '') {
 function confirmInline(areaId, onConfirm) {
   const area = document.getElementById(areaId);
   if (!area) return;
+  const original = area.innerHTML;
   area.innerHTML = `
     <div style="display:flex;align-items:center;gap:8px;padding:4px 0">
       <span style="font-size:0.75rem;color:var(--text2);flex:1">¿Seguro?</span>
@@ -288,10 +289,10 @@ function confirmInline(areaId, onConfirm) {
       </button>
     </div>`;
   document.getElementById(`${areaId}-confirm`).addEventListener('click', onConfirm);
-  document.getElementById(`${areaId}-cancel`).addEventListener('click', () => openManageSheet());
+  document.getElementById(`${areaId}-cancel`).addEventListener('click', () => { area.innerHTML = original; });
 }
 
-function wireManageSheet(confirmed, iaList) {
+function wireManageSheet(confirmed) {
   document.getElementById('gd-del-counts')?.addEventListener('click', () =>
     confirmInline('gd-del-counts-area', () => {
       localStorage.removeItem('ic');
@@ -336,7 +337,7 @@ function openManageSheet() {
   const dbRefs  = new Set(_rawAll.map(p => p.ref));
   const confirmed = iaList.filter(p => dbRefs.has(p.ref));
 
-  const countRefs = Object.keys(counts).filter(r => (counts[r]?.almacen ?? 0) + (counts[r]?.tienda ?? counts[r]?.qty ?? 0) > 0);
+  const countRefs = Object.keys(counts).filter(r => totalQtyResumen(counts[r]) > 0);
   const orderRefs = Object.keys(orders).filter(r => orders[r] > 0);
   const editCount = Object.keys(editOvr).length;
 
