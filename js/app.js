@@ -8,7 +8,8 @@ import { mount as mountConteos,  unmount as unmountConteos  } from './conteos.js
 import { mount as mountPedidos,  unmount as unmountPedidos  } from './pedidos.js';
 import { mount as mountResumen,   unmount as unmountResumen   } from './resumen.js';
 import { mount as mountAlbaranes, unmount as unmountAlbaranes } from './albaranes.js';
-import { toast } from './ui.js';
+import { toast, closeSheet } from './ui.js';
+import { closeCamera } from './camera-scanner.js';
 import { showTutorial } from './tutorial.js';
 
 const TABS = {
@@ -73,6 +74,31 @@ function ensureUserName() {
   });
 }
 
+function initBackGuard() {
+  history.pushState({ backGuard: true }, '');
+  let _pending = false;
+  let _timer   = null;
+
+  window.addEventListener('popstate', () => {
+    if (!document.getElementById('cam-scanner-overlay').classList.contains('hidden')) {
+      closeCamera();
+      history.pushState({ backGuard: true }, '');
+      return;
+    }
+    if (!document.getElementById('sheet-overlay').classList.contains('hidden')) {
+      closeSheet();
+      history.pushState({ backGuard: true }, '');
+      return;
+    }
+    if (_pending) return;
+    _pending = true;
+    clearTimeout(_timer);
+    _timer = setTimeout(() => { _pending = false; }, 2000);
+    toast('Pulsa atrás de nuevo para salir', '', 2000);
+    history.pushState({ backGuard: true }, '');
+  });
+}
+
 async function init() {
   await openDB();
   await ensureUserName();
@@ -110,6 +136,7 @@ async function init() {
 
   switchTab('lista');
   showTutorial();
+  initBackGuard();
 }
 
 function switchTab(tab) {
