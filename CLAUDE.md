@@ -18,7 +18,7 @@ PWA mobile-first de gestión de inventario para la empresa CPB. Sin framework, v
 - **⚠️ Existe `master` pero NO despliega.** Nunca hagas push a master creyendo que va a producción.
 - **Deploy:** automático vía GitHub Pages al push a `main`
 - **Remote:** `https://github.com/reivajsk8-design/inventario-cpb.git`
-- **SW:** auto-incrementa `CACHE_NAME` en cada commit vía git pre-commit hook. Última versión: `cpb-v51`
+- **SW:** auto-incrementa `CACHE_NAME` en cada commit vía git pre-commit hook. Última versión: `cpb-v55`
 
 ```bash
 # Flujo correcto
@@ -211,12 +211,14 @@ git push origin main
 | 2026-06-02 | Fix: cámara se reanuda automáticamente al cerrar sheet (EAN no encontrado o sin confirmar) |
 | 2026-06-02 | Notas por artículo en Conteos: toggle → textarea, indicador en lista, columna en Excel |
 | 2026-06-02 | Notas se guardan al cerrar panel sin confirmar (si el artículo ya tiene conteo) |
+| 2026-06-02 | EAN extra FORR20 — 4030600347584 |
+| 2026-06-02 | BD: 6 refs conflictivas resueltas (PPRA264/265/266, PHER54/55/57) + familia PERFUMES |
+| 2026-06-02 | Back guard — doble atrás para salir de la PWA (toast de aviso en primera pulsación) |
+| 2026-06-02 | Gestionar datos locales — 4 resets independientes con confirmación inline + detección inteligente ia |
 
 ---
 
 ## Backlog pendiente
 
-1. Reset independiente Conteos vs Pedidos
-2. Estado "Pendiente" seleccionable en Albaranes
-3. Export PDF de lista de albaranes completa
-4. Revisar 6 refs conflictivas en PROXIUM: PPRA264-1, PPRA265-1, PPRA266-1, PHER54-1, PHER55-1, PHER57-1
+1. Estado "Pendiente" seleccionable en Albaranes
+2. Export PDF de lista de albaranes completa
