@@ -79,23 +79,21 @@ function initBackGuard() {
   let _pending = false;
   let _timer   = null;
 
+  const reGuard = () => setTimeout(() => history.pushState({ backGuard: true }, ''), 0);
+
   window.addEventListener('popstate', () => {
     if (!document.getElementById('cam-scanner-overlay').classList.contains('hidden')) {
-      closeCamera();
-      history.pushState({ backGuard: true }, '');
-      return;
+      closeCamera(); reGuard(); return;
     }
     if (!document.getElementById('sheet-overlay').classList.contains('hidden')) {
-      closeSheet();
-      history.pushState({ backGuard: true }, '');
-      return;
+      closeSheet(); reGuard(); return;
     }
     if (_pending) return;
     _pending = true;
     clearTimeout(_timer);
     _timer = setTimeout(() => { _pending = false; }, 2000);
     toast('Pulsa atrás de nuevo para salir', '', 2000);
-    history.pushState({ backGuard: true }, '');
+    reGuard();
   });
 }
 
