@@ -75,25 +75,39 @@ function ensureUserName() {
 }
 
 function initBackGuard() {
-  history.pushState({ backGuard: true }, '');
+  const _guardUrl = location.pathname + location.search + '#_bg';
+  history.pushState({ backGuard: true }, '', _guardUrl);
   let _pending = false;
   let _timer   = null;
-
-  const reGuard = () => setTimeout(() => history.pushState({ backGuard: true }, ''), 0);
+  let _exiting = false;
 
   window.addEventListener('popstate', () => {
+    if (_exiting) return;
+
     if (!document.getElementById('cam-scanner-overlay').classList.contains('hidden')) {
-      closeCamera(); reGuard(); return;
+      closeCamera();
+      history.pushState({ backGuard: true }, '', _guardUrl);
+      return;
     }
     if (!document.getElementById('sheet-overlay').classList.contains('hidden')) {
-      closeSheet(); reGuard(); return;
+      closeSheet();
+      history.pushState({ backGuard: true }, '', _guardUrl);
+      return;
     }
-    if (_pending) return;
+
+    if (_pending) {
+      _pending = false;
+      clearTimeout(_timer);
+      _exiting = true;
+      setTimeout(() => history.go(-1), 0);
+      return;
+    }
+
     _pending = true;
     clearTimeout(_timer);
     _timer = setTimeout(() => { _pending = false; }, 2000);
     toast('Pulsa atrás de nuevo para salir', '', 2000);
-    reGuard();
+    history.pushState({ backGuard: true }, '', _guardUrl);
   });
 }
 
