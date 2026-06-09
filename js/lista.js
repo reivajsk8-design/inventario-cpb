@@ -482,6 +482,7 @@ function openEditSheet(ref) {
     const idx = _all.findIndex(x => x.ref === ref);
     if (idx >= 0) _all[idx] = { ..._rawAll.find(x => x.ref === ref), ...ovr };
     _filtered = [..._all];
+    closeSheet();
     toast('Cambios guardados', 'green');
     renderList();
   };
