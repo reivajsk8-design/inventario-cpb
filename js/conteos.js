@@ -524,6 +524,7 @@ function exportComparativa(stock, counts) {
     return [
       ref,
       prod.name    || '',
+      prod.ean     || '',
       prod.family  || '',
       sysQty,
       contado ?? '',
@@ -533,7 +534,7 @@ function exportComparativa(stock, counts) {
     ];
   };
 
-  rows.push(['REF', 'Nombre', 'Familia', 'Stock sistema', 'Contado', 'Diferencia', 'Estado', 'Notas']);
+  rows.push(['REF', 'Nombre', 'EAN', 'Familia', 'Stock sistema', 'Contado', 'Diferencia', 'Estado', 'Notas']);
   diferencias.forEach(r => rows.push(toRow(r)));
   cuadrados.forEach(r   => rows.push(toRow(r)));
   sinContar.forEach(r   => rows.push(toRow(r)));
@@ -543,7 +544,7 @@ function exportComparativa(stock, counts) {
     const ws  = XLSX.utils.aoa_to_sheet(rows);
 
     // Ancho de columnas
-    ws['!cols'] = [{ wch: 14 }, { wch: 40 }, { wch: 16 }, { wch: 14 }, { wch: 10 }, { wch: 12 }, { wch: 14 }, { wch: 30 }];
+    ws['!cols'] = [{ wch: 14 }, { wch: 40 }, { wch: 16 }, { wch: 16 }, { wch: 14 }, { wch: 10 }, { wch: 12 }, { wch: 14 }, { wch: 30 }];
 
     XLSX.utils.book_append_sheet(wb, ws, 'Comparativa');
 
