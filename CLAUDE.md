@@ -18,7 +18,7 @@ PWA mobile-first de gestión de inventario para la empresa CPB. Sin framework, v
 - **⚠️ Existe `master` pero NO despliega.** Nunca hagas push a master creyendo que va a producción.
 - **Deploy:** automático vía GitHub Pages al push a `main`
 - **Remote:** `https://github.com/reivajsk8-design/inventario-cpb.git`
-- **SW:** auto-incrementa `CACHE_NAME` en cada commit vía git pre-commit hook. Última versión: `cpb-v55`
+- **SW:** auto-incrementa `CACHE_NAME` en cada commit vía git pre-commit hook. Última versión: `cpb-v61`
 
 ```bash
 # Flujo correcto
@@ -215,6 +215,8 @@ git push origin main
 | 2026-06-02 | BD: 6 refs conflictivas resueltas (PPRA264/265/266, PHER54/55/57) + familia PERFUMES |
 | 2026-06-02 | Back guard — doble atrás para salir de la PWA (toast de aviso en primera pulsación) |
 | 2026-06-02 | Gestionar datos locales — 4 resets independientes con confirmación inline + detección inteligente ia |
+| 2026-07-03 | EAN con ceros a la izquierda: `normEan()` en `js/eans.js` — `matchesEan` compara sin ceros iniciales (mismo GTIN, p.ej. Victoria Secret) |
+| 2026-07-03 | IVA solo real: limpieza de `db.json.gz` (1.695 con `2100`/`0` → `21`); el fallo venía propagado desde el matcher vía sync |
 
 ---
 
