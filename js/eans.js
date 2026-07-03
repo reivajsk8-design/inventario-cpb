@@ -27,9 +27,17 @@ export function getExtraEans(ref) {
   return [...new Set([...s, ...l])];
 }
 
+// Normaliza un EAN para comparar: solo dígitos y sin ceros a la izquierda.
+// Así "0084350694000" y "84350694000" (mismo GTIN, la pistola a veces lee el
+// cero inicial y a veces no) se consideran el mismo código.
+function normEan(e) {
+  return String(e || '').replace(/\D/g, '').replace(/^0+/, '');
+}
+
 export function matchesEan(p, ean) {
-  if (!ean) return false;
-  return p.ean === ean || getExtraEans(p.ref).includes(ean);
+  const q = normEan(ean);
+  if (!q) return false;
+  return normEan(p.ean) === q || getExtraEans(p.ref).some(e => normEan(e) === q);
 }
 
 export function isLocalEan(ref, ean) {
