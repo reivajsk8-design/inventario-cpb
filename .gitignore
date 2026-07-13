@@ -1,0 +1,29 @@
+# === Runtime del sync (no publicar) ===
+.sync-state.json
+sync-log.txt
+dry-run-output/
+
+# === Scripts internos: contienen la ruta del servidor de oficina (\\DF8nqc64\...),
+#     el ERP o backups. NUNCA deben subirse al repo PÚBLICO de GitHub. ===
+*.cjs
+automatizacion-cpb/
+/Inventario CPB/
+
+# .bat internos (el arranque local start-servidor.bat sí se publica)
+*.bat
+!start-servidor.bat
+
+# === Backups y datos pesados locales ===
+*.xlsx
+cpb_bd_backup_*
+eans-extra (*).json
+
+# === Dependencias y utilidades de trabajo (no forman parte del sitio) ===
+node_modules/
+.claude/
+.superpowers/
+
+# === Copias/versiones antiguas de la app (no publicar) ===
+inventario-cpb/
+inventario_cpb_v8.html
+inventario_nuevo.html
