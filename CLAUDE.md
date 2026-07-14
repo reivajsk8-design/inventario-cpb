@@ -217,6 +217,9 @@ git push origin main
 | 2026-06-02 | Gestionar datos locales — 4 resets independientes con confirmación inline + detección inteligente ia |
 | 2026-07-03 | EAN con ceros a la izquierda: `normEan()` en `js/eans.js` — `matchesEan` compara sin ceros iniciales (mismo GTIN, p.ej. Victoria Secret) |
 | 2026-07-03 | IVA solo real: limpieza de `db.json.gz` (1.695 con `2100`/`0` → `21`); el fallo venía propagado desde el matcher vía sync |
+| 2026-07-14 | Chequeo de seguridad: `esc()` (en `ui.js`, exportada) anti-XSS en innerHTML de todas las vistas (nombres/proveedor/notas) |
+| 2026-07-14 | SRI (`integrity`) en pako (CDN); `.gitignore` endurecido (no publicar `*.cjs`/`*.bat`/backups/ruta interna); permisos de carpeta restringidos |
+| 2026-07-14 | PENDIENTE (decisión del usuario): la app + `db.json.gz` (costes/márgenes) son PÚBLICAS en GitHub Pages → falta control de acceso (Cloudflare Access u otro) |
 
 ---
 
