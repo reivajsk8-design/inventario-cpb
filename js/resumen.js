@@ -1,6 +1,6 @@
 // js/resumen.js
 import { getAllProducts }      from './db.js';
-import { openSheet, closeSheet, toast } from './ui.js';
+import { openSheet, closeSheet, toast, esc } from './ui.js';
 
 function totalQtyResumen(v) {
   if (!v) return 0;
@@ -371,8 +371,8 @@ function openManageSheet() {
           <div style="display:flex;justify-content:space-between;align-items:center;
                       padding:5px 0;border-bottom:1px solid var(--separator)">
             <div style="min-width:0">
-              <span style="font-size:0.75rem;font-weight:700;color:var(--text)">${p.ref}</span>
-              <span style="font-size:0.68rem;color:var(--text3);margin-left:6px">${(p.name || '').slice(0, 30)}</span>
+              <span style="font-size:0.75rem;font-weight:700;color:var(--text)">${esc(p.ref)}</span>
+              <span style="font-size:0.68rem;color:var(--text3);margin-left:6px">${esc((p.name || '').slice(0, 30))}</span>
             </div>
             <span style="font-size:0.7rem;font-weight:700;white-space:nowrap;margin-left:8px;
               color:${dbRefs.has(p.ref) ? 'var(--green)' : 'var(--amber)'}">

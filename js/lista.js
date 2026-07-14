@@ -1,7 +1,7 @@
 // js/lista.js
 import { getAllProducts, getFamilies }    from './db.js';
 import { filterProducts, mountFilterBar } from './filters.js';
-import { openSheet, closeSheet, toast }  from './ui.js';
+import { openSheet, closeSheet, toast, esc }  from './ui.js';
 import { getExtraEans, isLocalEan, assignEan, removeLocalEan,
          countPending, clearPendingEans, exportEansJSON } from './eans.js';
 
@@ -230,19 +230,19 @@ function prodHTML(p, editOvr) {
   }
 
   return `
-    <div class="prod-item" data-ref="${p.ref}">
+    <div class="prod-item" data-ref="${esc(p.ref)}">
       <div style="flex:1;min-width:0">
         <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-bottom:4px">
           ${isNew
-            ? `<span class="prod-tag" style="background:rgba(255,159,10,0.2);color:#FF9F0A">✦ ${p.ref}</span>`
-            : `<span class="prod-tag ${edited ? 'tag-edited' : 'tag-ref'}">${p.ref}</span>`}
-          ${p.proxium && p.proxium !== p.ref ? `<span class="prod-tag tag-proxium">${p.proxium}</span>` : ''}
-          <div class="prod-name" style="flex:1;min-width:80px">${p.name}</div>
+            ? `<span class="prod-tag" style="background:rgba(255,159,10,0.2);color:#FF9F0A">✦ ${esc(p.ref)}</span>`
+            : `<span class="prod-tag ${edited ? 'tag-edited' : 'tag-ref'}">${esc(p.ref)}</span>`}
+          ${p.proxium && p.proxium !== p.ref ? `<span class="prod-tag tag-proxium">${esc(p.proxium)}</span>` : ''}
+          <div class="prod-name" style="flex:1;min-width:80px">${esc(p.name)}</div>
         </div>
         <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-          ${p.family ? `<span class="prod-tag tag-family">${p.family}</span>` : ''}
+          ${p.family ? `<span class="prod-tag tag-family">${esc(p.family)}</span>` : ''}
           ${[p.ean, ...getExtraEans(p.ref)].filter(Boolean).map(e =>
-            `<span style="font-size:0.6rem;color:var(--text3)">▪ ${e}</span>`
+            `<span style="font-size:0.6rem;color:var(--text3)">▪ ${esc(e)}</span>`
           ).join('')}
         </div>
         ${alcoholBadges(alc)}
@@ -274,9 +274,9 @@ function openProductSheet(ref) {
           ${(p.family || '?').slice(0, 2).toUpperCase()}
         </div>
         <div>
-          <div class="qty-sheet-name">${p.name}</div>
-          <div class="qty-sheet-meta">${p.ref}${p.family ? ' · ' + p.family : ''}</div>
-          ${p.ean ? `<div class="qty-sheet-ean">EAN ${p.ean}${p.proxium ? ' · Ref.Prov. ' + p.proxium : ''}</div>` : ''}
+          <div class="qty-sheet-name">${esc(p.name)}</div>
+          <div class="qty-sheet-meta">${esc(p.ref)}${p.family ? ' · ' + esc(p.family) : ''}</div>
+          ${p.ean ? `<div class="qty-sheet-ean">EAN ${esc(p.ean)}${p.proxium ? ' · Ref.Prov. ' + esc(p.proxium) : ''}</div>` : ''}
         </div>
       </div>
 
@@ -397,7 +397,7 @@ function openEditSheet(ref) {
 
   openSheet(`
     <div style="font-size:0.9rem;font-weight:700;color:var(--text);margin-bottom:4px">✏️ Editar artículo</div>
-    <div style="font-size:0.65rem;color:var(--text3);margin-bottom:14px">${cur.ref}</div>
+    <div style="font-size:0.65rem;color:var(--text3);margin-bottom:14px">${esc(cur.ref)}</div>
     ${EDIT_FIELDS.map(({ key, label, type }) => `
       <div style="margin-bottom:10px">
         <div class="qty-label">${label}</div>
@@ -405,7 +405,7 @@ function openEditSheet(ref) {
                type="${type}"
                step="${type === 'number' ? '0.01' : undefined}"
                style="width:100%;background:var(--surface2);border-radius:10px;padding:10px 12px;color:var(--text);font-size:0.85rem"
-               value="${cur[key] ?? ''}">
+               value="${esc(cur[key] ?? '')}">
       </div>`).join('')}
     <div style="margin-bottom:14px;padding:12px;background:var(--surface2);border-radius:12px">
       <div class="qty-label" style="margin-bottom:8px">EANs adicionales</div>
@@ -433,13 +433,13 @@ function openEditSheet(ref) {
     section.innerHTML = extras.map(e => {
       const local = isLocalEan(ref, e);
       return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-        <span style="flex:1;font-size:0.78rem;font-family:monospace;color:var(--text)">${e}</span>
+        <span style="flex:1;font-size:0.78rem;font-family:monospace;color:var(--text)">${esc(e)}</span>
         <span style="font-size:0.6rem;padding:2px 6px;border-radius:4px;
           background:${local ? 'rgba(255,159,10,0.2)' : 'rgba(48,209,88,0.15)'};
           color:${local ? 'var(--amber)' : 'var(--green)'}">
           ${local ? 'local' : 'publicado'}
         </span>
-        ${local ? `<button class="btn-rm-ean" data-ean="${e}" style="
+        ${local ? `<button class="btn-rm-ean" data-ean="${esc(e)}" style="
           padding:3px 8px;border-radius:6px;background:rgba(255,69,58,0.12);
           color:var(--red);font-size:0.72rem;font-weight:700">✕</button>` : ''}
       </div>`;

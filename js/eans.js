@@ -1,5 +1,5 @@
 // js/eans.js
-import { openSheet, closeSheet, toast } from './ui.js';
+import { openSheet, closeSheet, toast, esc } from './ui.js';
 
 let _serverEans   = {};
 let _pendingCache = null;
@@ -99,13 +99,13 @@ export function openAssignEanSheet(ean, products, onAssigned, onClose) {
     } else if (matches.length > 0) {
       resultsEl.innerHTML = `<div class="prod-list">
         ${matches.slice(0, 12).map(p => `
-          <div class="prod-item assign-pick" data-ref="${p.ref}" style="cursor:pointer">
+          <div class="prod-item assign-pick" data-ref="${esc(p.ref)}" style="cursor:pointer">
             <div style="flex:1;min-width:0">
               <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-bottom:3px">
-                <span class="prod-tag tag-ref">${p.ref}</span>
-                <div class="prod-name">${p.name}</div>
+                <span class="prod-tag tag-ref">${esc(p.ref)}</span>
+                <div class="prod-name">${esc(p.name)}</div>
               </div>
-              ${p.family ? `<span class="prod-tag tag-family">${p.family}</span>` : ''}
+              ${p.family ? `<span class="prod-tag tag-family">${esc(p.family)}</span>` : ''}
             </div>
           </div>`).join('')}
       </div>`;
@@ -125,7 +125,7 @@ export function openAssignEanSheet(ean, products, onAssigned, onClose) {
 
   openSheet(`
     <div style="font-size:0.9rem;font-weight:700;color:var(--text);margin-bottom:2px">EAN no encontrado</div>
-    <div style="font-size:0.75rem;color:var(--text3);margin-bottom:12px;font-family:monospace;letter-spacing:0.05em">${ean}</div>
+    <div style="font-size:0.75rem;color:var(--text3);margin-bottom:12px;font-family:monospace;letter-spacing:0.05em">${esc(ean)}</div>
     <div class="qty-label" style="margin-bottom:6px">¿A qué artículo pertenece?</div>
     <input id="assign-q" type="text" autocomplete="off" inputmode="text"
            placeholder="Buscar nombre, REF o familia…"

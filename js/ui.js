@@ -1,6 +1,13 @@
 // js/ui.js
 import { pauseScanner, resumeScanner } from './scanner.js';
 
+// Escapa texto no confiable (nombres de artículo importados, notas, etc.) antes
+// de meterlo en innerHTML. Evita XSS almacenado (un nombre con <img onerror=...>).
+export function esc(s) {
+  return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
 let _toastTimer = null;
 
 export function toast(msg, type = '', ms = 2200) {
@@ -43,9 +50,9 @@ export function openQtySheet(product, quickQtys, actionLabel, onConfirm) {
     <div class="qty-sheet-product">
       <div class="prod-avatar">${(product.family || '?').slice(0, 2).toUpperCase()}</div>
       <div>
-        <div class="qty-sheet-name">${product.name}</div>
-        <div class="qty-sheet-meta">${product.ref} · ${product.family}</div>
-        <div class="qty-sheet-ean">EAN ${product.ean || '—'} · ${product.proxium || ''}</div>
+        <div class="qty-sheet-name">${esc(product.name)}</div>
+        <div class="qty-sheet-meta">${esc(product.ref)} · ${esc(product.family)}</div>
+        <div class="qty-sheet-ean">EAN ${esc(product.ean || '—')} · ${esc(product.proxium || '')}</div>
       </div>
     </div>
     <div class="qty-label">Cantidad</div>
@@ -150,9 +157,9 @@ export function openCountSheet(product, counts, zona, quickQtys, onResult, onZon
       <div class="qty-sheet-product">
         <div class="prod-avatar">${avatar}</div>
         <div>
-          <div class="qty-sheet-name">${product.name}</div>
-          <div class="qty-sheet-meta">${product.ref} · ${product.family}</div>
-          <div class="qty-sheet-ean">EAN ${product.ean || '—'} · ${product.proxium || ''}</div>
+          <div class="qty-sheet-name">${esc(product.name)}</div>
+          <div class="qty-sheet-meta">${esc(product.ref)} · ${esc(product.family)}</div>
+          <div class="qty-sheet-ean">EAN ${esc(product.ean || '—')} · ${esc(product.proxium || '')}</div>
         </div>
       </div>
       ${summaryHTML}
@@ -231,7 +238,7 @@ export function openCountSheet(product, counts, zona, quickQtys, onResult, onZon
   function openCorrectMode() {
     document.getElementById('sheet-content').innerHTML = `
       <div style="font-size:0.9rem;font-weight:700;color:var(--text);margin-bottom:4px">✏️ Corregir conteo</div>
-      <div style="font-size:0.65rem;color:var(--text3);margin-bottom:18px">${product.ref} — ${product.name}</div>
+      <div style="font-size:0.65rem;color:var(--text3);margin-bottom:18px">${esc(product.ref)} — ${esc(product.name)}</div>
       <div style="margin-bottom:12px">
         <div class="qty-label" style="margin-bottom:6px">🏪 Almacén</div>
         <input id="corr-alm" type="number" min="0" inputmode="numeric"

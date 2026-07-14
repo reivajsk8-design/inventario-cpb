@@ -1,7 +1,7 @@
 // js/pedidos.js
 import { getAllProducts, getFamilies }    from './db.js';
 import { filterProducts, mountFilterBar } from './filters.js';
-import { openSheet, closeSheet, openQtySheet, toast } from './ui.js';
+import { openSheet, closeSheet, openQtySheet, toast, esc } from './ui.js';
 import { startScanner }                  from './scanner.js';
 import { matchesEan, openAssignEanSheet } from './eans.js';
 import { cameraSupported, openCamera, closeCamera, resumeCamera, beepError } from './camera-scanner.js';
@@ -97,9 +97,9 @@ function openEditSheet(p) {
     <div class="qty-sheet-product">
       <div class="prod-avatar">${(p.family || '?').slice(0, 2).toUpperCase()}</div>
       <div>
-        <div class="qty-sheet-name">${p.name}</div>
-        <div class="qty-sheet-meta">${p.ref}${p.family ? ' · ' + p.family : ''}</div>
-        <div class="qty-sheet-ean">EAN ${p.ean || '—'}${p.proxium ? ' · Ref.Prov. ' + p.proxium : ''}</div>
+        <div class="qty-sheet-name">${esc(p.name)}</div>
+        <div class="qty-sheet-meta">${esc(p.ref)}${p.family ? ' · ' + esc(p.family) : ''}</div>
+        <div class="qty-sheet-ean">EAN ${esc(p.ean || '—')}${p.proxium ? ' · Ref.Prov. ' + esc(p.proxium) : ''}</div>
       </div>
     </div>
     <div class="qty-label" style="margin-bottom:6px">Cantidad total en pedido</div>
@@ -213,16 +213,16 @@ function renderList() {
       : `<div class="prod-list">
            ${page.map(p => {
              const qty = orders[p.ref];
-             return `<div class="prod-item" data-ref="${p.ref}">
+             return `<div class="prod-item" data-ref="${esc(p.ref)}">
                <div style="flex:1;min-width:0">
                  <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-bottom:4px">
-                   <span class="prod-tag tag-ordered">${p.ref}</span>
-                   ${p.proxium ? `<span class="prod-tag tag-proxium">${p.proxium}</span>` : ''}
-                   <div class="prod-name" style="flex:1;min-width:80px">${p.name}</div>
+                   <span class="prod-tag tag-ordered">${esc(p.ref)}</span>
+                   ${p.proxium ? `<span class="prod-tag tag-proxium">${esc(p.proxium)}</span>` : ''}
+                   <div class="prod-name" style="flex:1;min-width:80px">${esc(p.name)}</div>
                  </div>
                  <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-                   ${p.family ? `<span class="prod-tag tag-family">${p.family}</span>` : ''}
-                   ${p.ean ? `<span style="font-size:0.6rem;color:var(--text3)">▪ ${p.ean}</span>` : ''}
+                   ${p.family ? `<span class="prod-tag tag-family">${esc(p.family)}</span>` : ''}
+                   ${p.ean ? `<span style="font-size:0.6rem;color:var(--text3)">▪ ${esc(p.ean)}</span>` : ''}
                  </div>
                </div>
                <div class="prod-qty-badge">${qty}<small>uds</small></div>

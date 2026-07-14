@@ -1,7 +1,7 @@
 // js/conteos.js
 import { getAllProducts, getFamilies }                       from './db.js';
 import { filterProducts, mountFilterBar }                    from './filters.js';
-import { openCountSheet, openSheet, closeSheet, toast } from './ui.js';
+import { openCountSheet, openSheet, closeSheet, toast, esc } from './ui.js';
 import { startScanner }                                      from './scanner.js';
 import { getStock, saveStock, clearStock, parseStockXLSX }  from './stock.js';
 import { matchesEan, openAssignEanSheet }                    from './eans.js';
@@ -262,13 +262,13 @@ function renderList() {
         </div>
         <div class="prod-list" style="margin-bottom:12px">
           ${shown.map(item => `
-            <div class="prod-item sin-contar-item" data-ref="${item.ref}" style="opacity:0.7">
+            <div class="prod-item sin-contar-item" data-ref="${esc(item.ref)}" style="opacity:0.7">
               <div style="flex:1;min-width:0">
                 <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-bottom:4px">
-                  <span class="prod-tag tag-ref">${item.ref}</span>
-                  <div class="prod-name" style="flex:1;min-width:80px">${item.name}</div>
+                  <span class="prod-tag tag-ref">${esc(item.ref)}</span>
+                  <div class="prod-name" style="flex:1;min-width:80px">${esc(item.name)}</div>
                 </div>
-                ${item.family ? `<div><span class="prod-tag tag-family">${item.family}</span></div>` : ''}
+                ${item.family ? `<div><span class="prod-tag tag-family">${esc(item.family)}</span></div>` : ''}
               </div>
               <div class="stock-cmp stock-pending">${item.sysQty}<small>en sistema</small></div>
             </div>`).join('')}
@@ -338,18 +338,18 @@ function renderList() {
           ? 'border-left:3px solid var(--amber);'
           : '';
 
-        return `<div class="prod-item" data-ref="${p.ref}" style="${rowStyle}">
+        return `<div class="prod-item" data-ref="${esc(p.ref)}" style="${rowStyle}">
           <div style="flex:1;min-width:0">
             <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-bottom:4px">
-              <span class="prod-tag ${counted ? 'tag-counted' : 'tag-ref'}">${p.ref}</span>
-              ${p.proxium ? `<span class="prod-tag tag-proxium">${p.proxium}</span>` : ''}
-              <div class="prod-name" style="flex:1;min-width:80px">${p.name}</div>
+              <span class="prod-tag ${counted ? 'tag-counted' : 'tag-ref'}">${esc(p.ref)}</span>
+              ${p.proxium ? `<span class="prod-tag tag-proxium">${esc(p.proxium)}</span>` : ''}
+              <div class="prod-name" style="flex:1;min-width:80px">${esc(p.name)}</div>
             </div>
             <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-              ${p.family ? `<span class="prod-tag tag-family">${p.family}</span>` : ''}
-              ${p.ean ? `<span style="font-size:0.6rem;color:var(--text3)">▪ ${p.ean}</span>` : ''}
+              ${p.family ? `<span class="prod-tag tag-family">${esc(p.family)}</span>` : ''}
+              ${p.ean ? `<span style="font-size:0.6rem;color:var(--text3)">▪ ${esc(p.ean)}</span>` : ''}
             </div>
-            ${noteText ? `<div style="font-size:0.7rem;color:var(--amber);font-style:italic;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px">📝 ${noteText}</div>` : ''}
+            ${noteText ? `<div style="font-size:0.7rem;color:var(--amber);font-style:italic;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px">📝 ${esc(noteText)}</div>` : ''}
           </div>
           ${badge}
         </div>`;

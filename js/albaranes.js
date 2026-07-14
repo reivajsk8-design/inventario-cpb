@@ -1,6 +1,6 @@
 // js/albaranes.js
 import { openDB } from './db.js';
-import { toast }  from './ui.js';
+import { toast, esc }  from './ui.js';
 
 const TERMINALS = ['D', 'MSC', 'E'];
 let _photos = [];
@@ -131,15 +131,15 @@ function albItemHTML(alb) {
   return `
     <div class="prod-item" data-alb="${alb.id}" style="align-items:flex-start">
       <div style="flex:1;min-width:0">
-        <div class="prod-name">Alb. ${alb.numero || '—'}</div>
-        <div class="prod-meta">${alb.terminal} · ${alb.nombre} · ${fecha}</div>
-        ${alb.proveedor ? `<div class="prod-meta">${alb.proveedor}</div>` : ''}
+        <div class="prod-name">Alb. ${esc(alb.numero || '—')}</div>
+        <div class="prod-meta">${esc(alb.terminal)} · ${esc(alb.nombre)} · ${fecha}</div>
+        ${alb.proveedor ? `<div class="prod-meta">${esc(alb.proveedor)}</div>` : ''}
         ${incLineas > 0
           ? `<div class="prod-meta" style="color:var(--red);margin-top:2px">⚠ ${incLineas} artículo${incLineas > 1 ? 's' : ''} con incidencia</div>`
           : totalLineas > 0
             ? `<div class="prod-meta" style="margin-top:2px">${totalLineas} artículo${totalLineas > 1 ? 's' : ''}</div>`
             : ''}
-        ${alb.notas ? `<div class="prod-meta" style="color:var(--amber);margin-top:2px">📝 ${alb.notas}</div>` : ''}
+        ${alb.notas ? `<div class="prod-meta" style="color:var(--amber);margin-top:2px">📝 ${esc(alb.notas)}</div>` : ''}
       </div>
       ${estadoBadge(alb.estado)}
     </div>`;
@@ -281,7 +281,7 @@ function renderForm(alb) {
 
     container.innerHTML = _photos.map((src, i) => `
       <div style="background:var(--surface);border-radius:12px;margin-bottom:8px;overflow:hidden">
-        <img src="${src}" style="width:100%;max-height:160px;object-fit:cover;display:block">
+        <img src="${esc(src)}" style="width:100%;max-height:160px;object-fit:cover;display:block">
         <div style="padding:8px 10px;display:flex;align-items:center;gap:6px">
           <span style="font-size:0.68rem;color:var(--text3);font-weight:700">
             Pág. ${i+1} / ${_photos.length}
@@ -617,7 +617,7 @@ function openCropEditor(imgSrc, onDone) {
       <button id="c-apply" style="color:#0A84FF;font-size:0.9rem;font-weight:700">Aplicar</button>
     </div>
     <div id="c-wrap" style="flex:1;position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#111">
-      <img id="c-img" src="${imgSrc}" style="max-width:100%;max-height:100%;object-fit:contain;display:block;user-select:none">
+      <img id="c-img" src="${esc(imgSrc)}" style="max-width:100%;max-height:100%;object-fit:contain;display:block;user-select:none">
       <canvas id="c-cvs" style="position:absolute;touch-action:none"></canvas>
     </div>
     <div style="background:#1C1C1E;padding:10px;display:flex;align-items:center;justify-content:center;gap:16px;flex-shrink:0">
