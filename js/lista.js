@@ -245,6 +245,7 @@ function prodHTML(p, editOvr) {
             `<span style="font-size:0.6rem;color:var(--text3)">▪ ${esc(e)}</span>`
           ).join('')}
         </div>
+        ${p.precio_recom != null ? `<div style="margin-top:5px"><span class="prod-tag" style="background:rgba(0,229,160,0.18);color:var(--green);font-weight:700;font-size:0.68rem" title="Precio recomendado de estantería (coste × margen × IVA, redondeado)">💶 Recom. ${Number(p.precio_recom).toFixed(2)}€</span></div>` : ''}
         ${alcoholBadges(alc)}
         ${perfumeBadges(perf)}
         ${gramosBadge(gramos)}
