@@ -165,13 +165,13 @@ function renderForm(alb) {
       <div style="background:var(--surface);border-radius:var(--radius-md);overflow:hidden;margin-bottom:16px">
         <input id="alb-numero" type="text" placeholder="Nº Albarán *"
           style="width:100%;padding:13px 14px;font-size:0.88rem;color:var(--text);border-bottom:0.5px solid var(--separator)"
-          value="${alb?.numero || ''}">
+          value="${esc(alb?.numero || '')}">
         <input id="alb-nombre" type="text" placeholder="Tu nombre *"
           style="width:100%;padding:13px 14px;font-size:0.88rem;color:var(--text);border-bottom:0.5px solid var(--separator)"
-          value="${defNombre}">
+          value="${esc(defNombre)}">
         <input id="alb-proveedor" type="text" placeholder="Proveedor (opcional)"
           style="width:100%;padding:13px 14px;font-size:0.88rem;color:var(--text)"
-          value="${alb?.proveedor || ''}">
+          value="${esc(alb?.proveedor || '')}">
       </div>
 
       <div class="qty-label" style="margin-bottom:8px">TERMINAL</div>

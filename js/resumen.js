@@ -40,7 +40,7 @@ function render() {
   document.getElementById('main').innerHTML = `
     <div style="display:flex;align-items:center;gap:8px;padding:14px 4px 2px">
       <span style="font-size:1rem">👤</span>
-      <span style="font-size:0.88rem;font-weight:700;color:var(--text);flex:1">${userName || '<span style="color:var(--text3)">Sin nombre</span>'}</span>
+      <span style="font-size:0.88rem;font-weight:700;color:var(--text);flex:1">${userName ? esc(userName) : '<span style="color:var(--text3)">Sin nombre</span>'}</span>
       <button id="btn-change-name" style="font-size:0.72rem;color:var(--accent);font-weight:700;padding:4px 10px;
         background:rgba(10,132,255,0.1);border-radius:8px">Cambiar</button>
     </div>
