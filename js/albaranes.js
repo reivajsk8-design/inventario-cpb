@@ -1,6 +1,6 @@
 // js/albaranes.js
 import { openDB } from './db.js';
-import { toast, esc }  from './ui.js';
+import { toast, esc, setNavTitle } from './ui.js';
 
 const TERMINALS = ['D', 'MSC', 'E'];
 let _photos = [];
@@ -57,12 +57,12 @@ export async function mount() {
 export function unmount() {
   const btn = document.getElementById('btn-nav-left');
   if (btn) { btn.textContent = ''; btn.onclick = null; }
-  document.getElementById('nav-title').textContent = 'Inventario CPB';
+  setNavTitle('Inventario CPB');
 }
 
 // ── Lista ─────────────────────────────────────────────────────────
 async function renderLista() {
-  document.getElementById('nav-title').textContent = 'Albaranes';
+  setNavTitle('Albaranes');
   const leftBtn = document.getElementById('btn-nav-left');
   leftBtn.textContent = ''; leftBtn.onclick = null;
 
@@ -153,7 +153,7 @@ function renderForm(alb) {
   let _terminal   = defTerm;
   _lineas = alb?.lineas ? alb.lineas.map(l => ({ ...l })) : [];
 
-  document.getElementById('nav-title').textContent = alb ? `Alb. ${alb.numero || '—'}` : 'Nuevo Albarán';
+  setNavTitle(alb ? `Alb. ${alb.numero || '—'}` : 'Nuevo Albarán');
   const leftBtn = document.getElementById('btn-nav-left');
   leftBtn.textContent = '←';
   leftBtn.onclick     = () => renderLista();

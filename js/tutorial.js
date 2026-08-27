@@ -83,9 +83,7 @@ function _mount() {
 
     slidesEl.innerHTML = `
       <div class="tut-slide">
-        <div class="tut-icon-wrap">
-          <span class="tut-icon">${s.icon}</span>
-        </div>
+        ${current === 0 ? '<img class="tut-logo" src="icons/cpb-logo.png" alt="Comerciants del Port de Barcelona">' : `<div class="tut-icon-wrap"><span class="tut-icon">${s.icon}</span></div>`}
         ${s.tab ? `<div class="tut-tab-badge">${s.tab}</div>` : ''}
         <div class="tut-title">${s.title}</div>
         <div class="tut-body">${s.body}</div>

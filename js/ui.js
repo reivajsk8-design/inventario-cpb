@@ -342,3 +342,10 @@ export function openCountSheet(product, counts, zona, quickQtys, onResult, onZon
 
   wireAddMode();
 }
+
+// Título de la barra superior: en la pantalla principal muestra el logo CPB en vez del texto
+export function setNavTitle(t) {
+  const el = document.getElementById('nav-title'); if (!el) return;
+  if (t === 'Inventario CPB') el.innerHTML = '<img class="nav-logo" src="icons/cpb-logo.png" alt="Inventario CPB">';
+  else el.textContent = t;
+}

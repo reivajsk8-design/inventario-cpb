@@ -24,6 +24,25 @@
 .navbar-btn:last-child { text-align: right; }
 .navbar-btn:first-child { text-align: left; }
 
+/* ── SPLASH DE ARRANQUE (logo CPB): visible al instante, se va cuando la app está lista ── */
+#splash { position: fixed; inset: 0; z-index: 9999; background: var(--bg); display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 26px; transition: opacity .22s ease; }
+#splash.hide { opacity: 0; pointer-events: none; }
+#splash img { width: min(62vw, 240px); height: auto; }
+.splash-bar { width: 110px; height: 2px; border-radius: 2px; background: rgba(255,255,255,.12); overflow: hidden; }
+.splash-bar i { display: block; height: 100%; width: 40%; border-radius: 2px; background: var(--accent);
+  animation: splash-slide 1.1s linear infinite; }
+@keyframes splash-slide { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
+/* logo CPB como título de la barra en la pantalla principal */
+.nav-logo { height: 24px; width: auto; display: block; margin: 0 auto; }
+/* logo en la primera pantalla del tutorial (se ve una vez: puede entrar con animación) */
+.tut-logo { display: block; width: min(60vw, 220px); height: auto; margin: 6px auto 18px;
+  animation: tut-logo-in .5s cubic-bezier(.23, 1, .32, 1) both; }
+@keyframes tut-logo-in { from { opacity: 0; transform: scale(.94); } }
+@media (prefers-reduced-motion: reduce) {
+  .splash-bar i { animation: none; width: 100%; } .tut-logo { animation: none; } #splash { transition: none; }
+}
+
 /* ── TAB BAR ── */
 .tabbar {
   background: rgba(28,28,30,0.9);

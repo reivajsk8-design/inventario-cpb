@@ -8,7 +8,7 @@ import { mount as mountConteos,  unmount as unmountConteos  } from './conteos.js
 import { mount as mountPedidos,  unmount as unmountPedidos  } from './pedidos.js';
 import { mount as mountResumen,   unmount as unmountResumen   } from './resumen.js';
 import { mount as mountAlbaranes, unmount as unmountAlbaranes } from './albaranes.js';
-import { toast, closeSheet } from './ui.js';
+import { toast, closeSheet, setNavTitle } from './ui.js';
 import { closeCamera } from './camera-scanner.js';
 import { showTutorial } from './tutorial.js';
 
@@ -113,6 +113,7 @@ function initBackGuard() {
 
 async function init() {
   await openDB();
+  hideSplash();   // a partir de aquí puede hacer falta interacción (nombre de usuario): fuera el splash
   await ensureUserName();
   await loadEansExtra();
 
@@ -147,8 +148,17 @@ async function init() {
   helpBtn._tutorialHandler = helpBtn.onclick;
 
   switchTab('lista');
+  hideSplash();
   showTutorial();
   initBackGuard();
+}
+
+// Pantalla de arranque: se va cuando la app está lista (mínimo 400 ms para que no parpadee)
+const SPLASH_MIN_MS = 400;
+function hideSplash() {
+  const s = document.getElementById('splash'); if (!s || s.dataset.hiding) return;
+  s.dataset.hiding = '1';
+  setTimeout(() => { s.classList.add('hide'); setTimeout(() => s.remove(), 260); }, Math.max(0, SPLASH_MIN_MS - performance.now()));
 }
 
 function switchTab(tab) {
@@ -159,7 +169,7 @@ function switchTab(tab) {
   _currentTab = tab;
   document.querySelectorAll('.tab-item').forEach(b =>
     b.classList.toggle('active', b.dataset.tab === tab));
-  document.getElementById('nav-title').textContent = TABS[tab].title;
+  setNavTitle(TABS[tab].title);
 
   TABS[tab].mount();
 }
@@ -206,4 +216,4 @@ init().catch(err => {
   document.getElementById('main').innerHTML =
     `<div class="empty-state"><div class="icon">⚠️</div><p>Error al arrancar: ${err.message}</p></div>`;
   console.error(err);
-});
+}).finally(hideSplash);
