@@ -27,3 +27,6 @@ node_modules/
 inventario-cpb/
 inventario_cpb_v8.html
 inventario_nuevo.html
+
+# documentacion interna: fuera del repo PUBLICO (se conserva en local)
+docs/

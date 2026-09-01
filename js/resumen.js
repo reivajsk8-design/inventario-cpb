@@ -86,12 +86,8 @@ function render() {
       style="background:rgba(10,132,255,0.08);color:var(--accent);border:1px solid rgba(10,132,255,0.2)">
       ✦ Exportar artículos nuevos (${newCount})
     </button>` : ''}
-    <a class="export-btn" href="./precio-scan.html"
-      style="background:linear-gradient(135deg,#BF5AF2,#0A84FF);color:#fff;margin-top:20px;display:block;text-decoration:none;text-align:center">
-      🌐 PrecioScan — Consultar precios de mercado
-    </a>
     <button class="export-btn" id="btn-manage-data"
-      style="background:var(--surface2);color:var(--text2);margin-top:8px">
+      style="background:var(--surface2);color:var(--text2);margin-top:20px">
       🗑 Gestionar datos locales
     </button>
   `;

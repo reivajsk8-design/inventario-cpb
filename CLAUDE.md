@@ -227,3 +227,17 @@ git push origin main
 
 1. Estado "Pendiente" seleccionable en Albaranes
 2. Export PDF de lista de albaranes completa
+
+
+### 2026-08-27 — Marca CPB: splash + logo en barra + tutorial + iconos PWA
+- `index.html`: `#splash` (logo `icons/cpb-logo.png` + barra de progreso) antes de `#app`; favicon PNG y apple-touch-icon PNG.
+- `js/app.js`: `hideSplash()` (mín. 400 ms) llamado tras `openDB()` (antes de `ensureUserName`, que espera al usuario) y en el `.finally` de `init()`.
+- `js/ui.js`: `export function setNavTitle(t)` — en 'Inventario CPB' pinta el logo (`.nav-logo`); **usar siempre este helper**, no `nav-title.textContent`.
+- `js/tutorial.js`: primera pantalla con `.tut-logo` en vez del icono.
+- `icons/`: `cpb-logo.png`, `icon-192/512/180.png`, `favicon-32.png`, `icon.svg` (paleta azul marino de la suite); `manifest.json` con PNGs; `sw.js` PRECACHE ampliado.
+- Pruebas: Chrome headless por CDP (tiempo real); `--virtual-time-budget` no vale (IndexedDB no avanza).
+
+### 2026-09-01 — Limpieza: PrecioScan viejo eliminado del repo
+- Quitado el botón "🌐 PrecioScan" de Resumen (su buscador necesitaba un servidor local muerto; la función vive ahora en el Matcher, botón 🌐 Precio de mercado).
+- Borrados del repo: precio-scan.html/-server.js, start-servidor.bat, cpb-tarifa-2026-ean.json, netlify.toml, package*.json (el sync no usa npm).
+- docs/ fuera del repo público (untracked + .gitignore), se conserva en local. Copias de todo en Downloads\ANTERIOR\inventario-restos-2026-09-01.
