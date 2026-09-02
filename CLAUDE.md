@@ -241,3 +241,7 @@ git push origin main
 - Quitado el botón "🌐 PrecioScan" de Resumen (su buscador necesitaba un servidor local muerto; la función vive ahora en el Matcher, botón 🌐 Precio de mercado).
 - Borrados del repo: precio-scan.html/-server.js, start-servidor.bat, cpb-tarifa-2026-ean.json, netlify.toml, package*.json (el sync no usa npm).
 - docs/ fuera del repo público (untracked + .gitignore), se conserva en local. Copias de todo en Downloads\ANTERIOR\inventario-restos-2026-09-01.
+
+### 2026-09-02 — Stock de conteos: acepta también el export de RÉGIMEN GENERAL
+- `js/stock.js`: la cabecera puede ser "Artículo + Cantidad" (depósito fiscal) o "Código + Stock/Disponible" (régimen general, "Detalle del stock" de Proxium).
+- `js/conteos.js`: cargar un archivo SUMA al stock ya cargado (permite DF + general en dos archivos); "Eliminar stock cargado" vacía todo. Toast muestra nuevos y total.

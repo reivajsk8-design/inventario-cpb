@@ -399,6 +399,7 @@ function openStockPanel() {
         <div style="font-size:1.6rem;margin-bottom:8px">📂</div>
         <div style="font-size:0.82rem;color:var(--text3)">Toca para elegir archivo</div>
         <div style="font-size:0.68rem;color:var(--text3);margin-top:4px">.xlsx · .xls</div>
+        <div style="font-size:0.68rem;color:var(--text3);margin-top:4px">vale la hoja del depósito fiscal Y la de régimen general — si cargas varias, se suman</div>
       </label>
       <input type="file" id="stock-file-input" accept=".xlsx,.xls" style="display:none">
       <div id="stock-file-name" style="font-size:0.75rem;color:var(--accent);text-align:center;margin-bottom:16px;min-height:16px"></div>
@@ -428,9 +429,12 @@ function openStockPanel() {
         const data  = await parseStockXLSX(_file);
         const count = Object.keys(data).length;
         if (count === 0) { toast('No se encontraron artículos', 'red'); return; }
-        saveStock(data);
+        // se SUMA a lo ya cargado: permite cargar depósito fiscal + régimen general en dos archivos
+        // ("Eliminar stock cargado" sigue vaciándolo todo)
+        const merged = Object.assign(getStock(), data);
+        saveStock(merged);
         closeSheet();
-        toast(`Stock cargado · ${count} artículos`, 'green');
+        toast(`Stock cargado · ${count} artículos (total ${Object.keys(merged).length})`, 'green');
         renderList();
       } catch (err) {
         console.error(err);
