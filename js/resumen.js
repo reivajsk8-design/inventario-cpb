@@ -1,5 +1,6 @@
 // js/resumen.js
 import { getAllProducts }      from './db.js';
+import { getStock }            from './stock.js';
 import { openSheet, closeSheet, toast, esc } from './ui.js';
 
 function totalQtyResumen(v) {
@@ -133,16 +134,23 @@ function render() {
 function buildCountsRows(counts) {
   const user     = localStorage.getItem('ic_user') || '';
   const terminal = localStorage.getItem('itr') || '';
+  // Si hay stock del sistema cargado (PROXIUM), el export lleva también
+  // "Stock sistema" y "Diferencia" (contado − stock); si no, quedan vacías.
+  const stock    = getStock();
+  const hayStock = Object.keys(stock).length > 0;
   return [
-    ['Usuario', 'Terminal', 'REF', 'Nombre', 'EAN', 'Ref. Proveedor', 'Familia', 'Almacén', 'Tienda', 'Total', 'Notas'],
+    ['Usuario', 'Terminal', 'REF', 'Nombre', 'EAN', 'Ref. Proveedor', 'Familia', 'Almacén', 'Tienda', 'Total', 'Stock sistema', 'Diferencia', 'Notas'],
     ...Object.entries(counts)
       .filter(([, v]) => totalQtyResumen(v) > 0)
       .map(([ref, v]) => {
         const p   = _all.find(x => x.ref === ref) || {};
         const alm = v.almacen ?? (v.qty || 0);
         const tie = v.tienda  ?? 0;
+        const tot = alm + tie;
+        const sys = hayStock && stock[ref] !== undefined ? stock[ref] : '';
+        const dif = sys === '' ? '' : tot - sys;
         return [user, terminal, ref, p.name || '', p.ean || '', p.proxium || '', p.family || '',
-                alm, tie, alm + tie, v.notes || ''];
+                alm, tie, tot, sys, dif, v.notes || ''];
       }),
   ];
 }
