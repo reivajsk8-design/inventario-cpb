@@ -18,7 +18,7 @@ PWA mobile-first de gestión de inventario para la empresa CPB. Sin framework, v
 - **⚠️ Existe `master` pero NO despliega.** Nunca hagas push a master creyendo que va a producción.
 - **Deploy:** automático vía GitHub Pages al push a `main`
 - **Remote:** `https://github.com/reivajsk8-design/inventario-cpb.git`
-- **SW:** auto-incrementa `CACHE_NAME` en cada commit vía git pre-commit hook. Última versión: `cpb-v61`
+- **SW:** auto-incrementa `CACHE_NAME` en cada commit vía git pre-commit hook. Última versión: `cpb-v72`
 
 ```bash
 # Flujo correcto
@@ -54,9 +54,12 @@ C:\Inventario CPB\          ← GIT ROOT (producción)
     ├── lista.js            ← Tab Lista: catálogo + edición local + conteo con zona
     ├── conteos.js          ← Tab Conteos: conteo por zonas + cámara + comparación stock
     ├── pedidos.js          ← Tab Pedidos: gestión de pedidos + cámara (nav-right)
+    ├── pedidos-core.js     ← Lógica PURA de pedidos: reparto por proveedor, filas Excel, historial, repetir (tests/)
+    ├── pedidos-export.js   ← Hojas «⬇ Exportar pedido» (un Excel por proveedor) y «📜 Historial» (repetir/descargar/borrar)
     ├── albaranes.js        ← Tab Albaranes: CRUD + foto + PDF
     ├── resumen.js          ← Tab Resumen: stats + exports Excel + nombre usuario
     └── tutorial.js         ← Tutorial de primera vez
+└── tests/pedidos-core.test.mjs ← node --test (lógica de pedidos, 7 pruebas)
 ```
 
 **Carpeta de utilidades** (NO en git):
