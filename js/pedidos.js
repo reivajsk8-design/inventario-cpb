@@ -5,6 +5,7 @@ import { openSheet, closeSheet, openQtySheet, toast, esc } from './ui.js';
 import { startScanner }                  from './scanner.js';
 import { matchesEan, openAssignEanSheet } from './eans.js';
 import { cameraSupported, openCamera, closeCamera, resumeCamera, beepError } from './camera-scanner.js';
+import { openExportSheet, openHistorySheet, getHistory } from './pedidos-export.js';
 
 const QUICK_QTYS = [6, 12, 24, 48];
 const TERMINALS  = ['D', 'MSC', 'E'];
@@ -184,6 +185,7 @@ function renderList() {
   const page       = items.slice(0, (_page + 1) * PAGE);
   const more       = items.length > page.length;
   const totalUnits = pedidos.reduce((s, p) => s + (orders[p.ref] || 0), 0);
+  const nHist      = getHistory().length;
 
   main.innerHTML = `
     <div style="padding:12px 12px 6px;display:flex;gap:8px">
@@ -199,8 +201,12 @@ function renderList() {
     <div style="padding:0 12px 4px;text-align:right;font-size:0.72rem;color:var(--text3)">
       <strong style="color:var(--accent)">${pedidos.length} refs</strong> · ${totalUnits} uds
     </div>
+    <div style="padding:2px 12px 8px;display:flex;gap:8px">
+      <button id="btn-exp-pedido" class="add-btn" style="flex:1.3;padding:11px 8px;font-size:0.8rem${pedidos.length ? '' : ';opacity:0.4'}" ${pedidos.length ? '' : 'disabled'}>⬇ Exportar pedido</button>
+      <button id="btn-hist-pedidos" style="flex:1;padding:11px 8px;border-radius:12px;background:var(--surface2);color:var(--text);font-size:0.8rem;font-weight:700">📜 Historial${nHist ? ' (' + nHist + ')' : ''}</button>
+    </div>
     <div style="padding:0 12px 4px;font-size:0.65rem;color:var(--text3)">
-      📡 Escanea para añadir · toca para editar cantidad
+      📡 Escanea para añadir · toca para editar cantidad · el Excel sale por proveedor
     </div>
     ${items.length === 0
       ? (!hasFilter
@@ -235,6 +241,8 @@ function renderList() {
   main.querySelectorAll('[data-term]').forEach(btn => {
     btn.addEventListener('click', () => { setTerminal(btn.dataset.term); renderList(); });
   });
+  document.getElementById('btn-exp-pedido')?.addEventListener('click', () => openExportSheet(_all, renderList));
+  document.getElementById('btn-hist-pedidos')?.addEventListener('click', () => openHistorySheet(_all, renderList));
 
   main.querySelectorAll('.prod-item').forEach(el => {
     el.addEventListener('click', () => {

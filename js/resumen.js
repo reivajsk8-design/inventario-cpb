@@ -2,6 +2,7 @@
 import { getAllProducts }      from './db.js';
 import { getStock }            from './stock.js';
 import { openSheet, closeSheet, toast, esc } from './ui.js';
+import { openExportSheet, getHistory } from './pedidos-export.js';
 
 function totalQtyResumen(v) {
   if (!v) return 0;
@@ -96,8 +97,8 @@ function render() {
   document.getElementById('btn-exp-counts').addEventListener('click', () =>
     ensureTerminal('itr', () => exportExcel('conteos', buildCountsRows(counts), localStorage.getItem('itr') || '')));
 
-  document.getElementById('btn-exp-orders').addEventListener('click', () =>
-    ensureTerminal('itp', () => exportExcel('pedidos', buildOrdersRows(orders), localStorage.getItem('itp') || '')));
+  // Pedidos: un Excel por proveedor (misma hoja que en la pestaña Pedidos); las líneas exportadas pasan al historial
+  document.getElementById('btn-exp-orders').addEventListener('click', () => openExportSheet(_all, render));
 
   document.getElementById('btn-exp-edits')?.addEventListener('click', () =>
     ensureTerminal('itr', () => exportExcel('modificaciones', buildEditsRows(editOvr), localStorage.getItem('itr') || '')));
@@ -311,6 +312,12 @@ function wireManageSheet(confirmed) {
       closeSheet(); toast('Pedidos borrados', 'green'); mount();
     }));
 
+  document.getElementById('gd-del-hist')?.addEventListener('click', () =>
+    confirmInline('gd-del-hist-area', () => {
+      localStorage.removeItem('ioh');
+      closeSheet(); toast('Historial de pedidos borrado', 'green'); mount();
+    }));
+
   document.getElementById('gd-del-edits')?.addEventListener('click', () =>
     confirmInline('gd-del-edits-area', () => {
       localStorage.removeItem('ie');
@@ -344,6 +351,7 @@ function openManageSheet() {
   const countRefs = Object.keys(counts).filter(r => totalQtyResumen(counts[r]) > 0);
   const orderRefs = Object.keys(orders).filter(r => orders[r] > 0);
   const editCount = Object.keys(editOvr).length;
+  const histCount = getHistory().length;
 
   function section(id, label, summary, btnId, btnLabel, empty) {
     return `
@@ -405,6 +413,7 @@ function openManageSheet() {
     </div>
     ${section('gd-counts', 'Conteos', `${countRefs.length} artículos contados`, 'gd-del-counts', '🗑 Borrar conteos', countRefs.length === 0)}
     ${section('gd-orders', 'Pedidos', `${orderRefs.length} artículos en pedido`, 'gd-del-orders', '🗑 Borrar pedidos', orderRefs.length === 0)}
+    ${section('gd-hist', 'Historial de pedidos', `${histCount} pedidos exportados desde este dispositivo`, 'gd-del-hist', '🗑 Borrar historial de pedidos', histCount === 0)}
     ${section('gd-edits', 'Ediciones locales', `${editCount} artículos modificados`, 'gd-del-edits', '🗑 Borrar ediciones', editCount === 0)}
     ${iaSection}
   `);
