@@ -1,7 +1,7 @@
 // js/tabaco-historico.js — stock, descuadres/regularización, histórico/anulación, ajustes y exports del módulo de tabaco
 import { openSheet, closeSheet, toast, esc } from './ui.js';
 import { descuadres, valesPendientes, anulados, filasExcelHistorico, filasExcelRegularizacion, resumenDia, nombreArchivo, fmtFecha, fmtHora, totalLineas, detalleMov, estadoMov } from './tabaco-core.js';
-import { registrar, guardar, verificarIntegridad, altaPersona, cambiarPinPersona, bajaPersona, cambiarPinAdmin, exportarCopia, borrarModulo } from './tabaco-store.js';
+import { registrar, verificarIntegridad, altaPersona, cambiarPinPersona, bajaPersona, cambiarPinAdmin, exportarCopia, borrarModulo } from './tabaco-store.js';
 
 const cont = () => document.getElementById('main');
 const TIPO_TXT = { inventario: '📋 Inventario', salida: '➜ Salida', recepcion: '✔ Recepción', entrada: '⬅ Entrada', anulacion: '↩ Anulación', regularizacion: '🧾 Regularización' };
@@ -406,14 +406,16 @@ export async function abrirAjustes(ctx) {
     };
     document.getElementById('tb-aj-term').onclick = ev => {
       const b = ev.target.closest('[data-t]'); if (!b) return;
-      ctx.estado.terminal = b.dataset.t; guardar(ctx.estado);
+      ctx.estado.terminal = b.dataset.t;
+      if (!ctx.guardar(ctx.estado)) return;
       toast('Los movimientos nuevos van al Terminal ' + b.dataset.t, 'green');
       pinta();
     };
     document.getElementById('tb-horas').onchange = ev => {
       const n = Math.max(1, Math.min(48, Math.trunc(Number(ev.target.value)) || 2));
-      ctx.estado.ajustes.horasAvisoVale = n; guardar(ctx.estado);
+      ctx.estado.ajustes.horasAvisoVale = n;
       ev.target.value = n;
+      if (!ctx.guardar(ctx.estado)) return;
       toast('Avisa a ' + plural(n, 'hora', 'horas') + ' del vale', 'green');
     };
     document.getElementById('tb-pin-admin').onclick = () => hojaPinNuevo('PIN de administrador', 'Teclea el PIN nuevo dos veces', pin => cambiarPinAdmin(ctx.estado, pin));

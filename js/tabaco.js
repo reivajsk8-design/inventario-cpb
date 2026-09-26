@@ -5,7 +5,7 @@ import { startScanner } from './scanner.js';
 import { matchesEan, openAssignEanSheet } from './eans.js';
 import { cameraSupported, openCamera, closeCamera, resumeCamera, beepError, beepMatch } from './camera-scanner.js';
 import { esTabaco, infoRefs, valesPendientes, descuadres, anulados, totalLineas, fmtFecha, fmtHora, siguienteVale, pinValido } from './tabaco-core.js';
-import { cargar, guardar, crear, registrar, verificarIntegridad, buscarPersonaPorPin, esAdminPin } from './tabaco-store.js';
+import { cargar, guardar, crear, registrar, verificarIntegridad, buscarPersonaPorPin, esAdminPin, KEY } from './tabaco-store.js';
 import { abrirInventario } from './tabaco-inventario.js';
 import { abrirStock, abrirDescuadres, abrirHistorico, abrirAjustes, compartirTexto } from './tabaco-historico.js';
 
@@ -13,6 +13,13 @@ const TERMINALS = ['D', 'MSC', 'E'];
 let _estado = null, _all = [], _integridad = { ok: true, problemas: [], n: 0 }, _onEan = null, _onCam = null, _pinFallos = 0, _pinBloqueoHasta = 0;
 
 const cont = () => document.getElementById('main');
+
+// Guardar puede fallar (otra ventana se ha adelantado, o el móvil no tiene sitio): se avisa con
+// un toast en vez de dejar la pantalla a medias. Devuelve si se pudo guardar.
+export function guardaAviso(estado) {
+  try { guardar(estado); return true; }
+  catch (err) { toast((err && err.message) || 'No se pudo guardar', 'red', 4000); return false; }
+}
 
 export const ctx = {
   get estado() { return _estado; },
@@ -23,8 +30,18 @@ export const ctx = {
   refrescar,
   buscarArticulo,
   setOnEan: fn => { _onEan = fn; },
+  guardar: guardaAviso,   // guardar avisando si otra ventana se ha adelantado
   toast, esc,
 };
+
+// Otra ventana (o la app instalada) ha escrito en `itab`: se recarga el estado y se repinta,
+// así las dos pantallas dicen lo mismo y nadie sigue trabajando sobre un registro viejo.
+function onStorage(ev) {
+  if (ev && ev.key && ev.key !== KEY) return;
+  _estado = cargar();
+  toast('El control de tabaco ha cambiado en otra ventana; pantalla actualizada.', '', 3500);
+  refrescar();
+}
 
 export async function mount() {
   const editOvr = JSON.parse(localStorage.getItem('ie') || '{}');
@@ -41,12 +58,15 @@ export async function mount() {
   }
   _onCam = () => openCamera(ean => manejarEan(ean, () => resumeCamera()), toast);
   document.getElementById('btn-cam-close').addEventListener('click', () => closeCamera());
+  window.removeEventListener('storage', onStorage);   // una sola suscripción, aunque se entre y salga
+  window.addEventListener('storage', onStorage);
   startScanner(ean => manejarEan(ean));
   renderInicio();
 }
 
 export function unmount() {
   closeCamera(); _onEan = null;
+  window.removeEventListener('storage', onStorage);
   startScanner(null);   // suelta la pistola: si no, seguiría leyendo en Lista, Resumen…
   const navBtn = document.getElementById('btn-nav-right');
   navBtn.textContent = '?'; navBtn.onclick = navBtn._tutorialHandler || null;
@@ -208,25 +228,32 @@ function buscarArticulo(onElegido, { soloConStock = false } = {}) {
 // tipo: 'salida' | 'entrada'
 async function abrirMovimiento(tipo) {
   const e = _estado, clave = tipo === 'salida' ? 'salidaEnCurso' : 'entradaEnCurso';
+  // Mientras se teclea el PIN otra ventana puede haber cambiado el registro (y `mount()` habrá
+  // cargado un estado nuevo): lo de antes ya no vale, se vuelve a empezar.
+  const mismoEstado = () => {
+    if (_estado === e) return true;
+    toast('El control de tabaco ha cambiado en otra ventana: vuelve a empezar.', 'red', 4000);
+    return false;
+  };
   const nuevo = quien => ({ personaId: quien.id, personaNombre: quien.nombre, lineas: [], nota: '', motivo: tipo === 'entrada' ? 'Llegada CISA' : '', iniciada: new Date().toISOString() });
   let borr = e[clave];
   if (borr) {
     const quien = await pedirPin({ titulo: `Continuar ${tipo === 'salida' ? 'salida' : 'entrada'} de ${borr.personaNombre}`, sub: 'Teclea tu PIN' });
-    if (!quien) return;
+    if (!quien || !mismoEstado()) return;
     if (quien.id !== borr.personaId) {   // es otra persona: o descarta lo de su compañero, o no sigue
       if (!confirm(`Este borrador es de ${borr.personaNombre} (${borr.lineas.length} líneas). ¿Descartarlo y empezar el tuyo?`)) return;
-      e[clave] = null; guardar(e); borr = nuevo(quien);
+      _estado[clave] = null; guardaAviso(_estado); borr = nuevo(quien);
     }
   } else {
     const quien = await pedirPin({ titulo: tipo === 'salida' ? '¿Quién saca el tabaco?' : '¿Quién registra la entrada?' });
-    if (!quien) return;
+    if (!quien || !mismoEstado()) return;
     borr = nuevo(quien);
   }
   // El borrador solo entra en el estado guardado cuando tiene líneas (y sale al quedarse sin ellas).
   const guardaBorrador = () => {
     if (borr.lineas.length) _estado[clave] = borr;
     else if (_estado[clave] === borr) _estado[clave] = null;
-    guardar(_estado);
+    guardaAviso(_estado);
   };
   const stock = () => _estado.stock || {};
   const enBorrador = ref => borr.lineas.filter(l => l.ref === ref).reduce((a, l) => a + l.qty, 0);
@@ -262,7 +289,7 @@ async function abrirMovimiento(tipo) {
         <input class="tb-input" id="tb-nota" placeholder="Nota (precinto, caja, observación…)" value="${esc(borr.nota)}">
         <button class="add-btn" id="tb-confirmar" ${borr.lineas.length ? '' : 'disabled style="opacity:0.4"'}>${tipo === 'salida' ? `Confirmar salida (${total} uds)` : `Confirmar entrada (${total} uds)`}</button>
       </div>`;
-    document.getElementById('tb-cancel').onclick = () => { if (!borr.lineas.length || confirm('¿Cancelar y borrar estas líneas? No queda registrado.')) { _estado[clave] = null; guardar(_estado); refrescar(); } };
+    document.getElementById('tb-cancel').onclick = () => { if (!borr.lineas.length || confirm('¿Cancelar y borrar estas líneas? No queda registrado.')) { _estado[clave] = null; guardaAviso(_estado); refrescar(); } };
     document.getElementById('tb-buscar').onclick = () => buscarArticulo(añadir, { soloConStock: tipo === 'salida' });
     document.getElementById('tb-nota').oninput = ev => { borr.nota = ev.target.value; guardaBorrador(); };
     const mot = document.getElementById('tb-motivo'); if (mot) mot.onclick = ev => { const b = ev.target.closest('[data-m]'); if (!b) return; borr.motivo = b.dataset.m; guardaBorrador(); pinta(); };
@@ -276,7 +303,7 @@ async function abrirMovimiento(tipo) {
       const persona = { id: borr.personaId, nombre: borr.personaNombre };
       const extra = tipo === 'salida' ? { vale: siguienteVale(_estado.movs), destino: 'tienda' } : { motivo: borr.motivo || 'Otro' };
       const mov = await registrar(_estado, { tipo, persona, lineas: borr.lineas, nota: borr.nota, extra });
-      _estado[clave] = null; guardar(_estado); _onEan = null;
+      _estado[clave] = null; guardaAviso(_estado); _onEan = null;
       mostrarVale(mov);
     } catch (err) {
       toast('No se pudo registrar: ' + ((err && err.message) || err), 'red', 4000);
@@ -323,6 +350,7 @@ function mostrarVale(m) {
 // El que recibe confirma el vale que salió del almacén. Si la cantidad no cuadra,
 // la diferencia queda como descuadre de tránsito (nadie puede taparla).
 async function abrirRecepcion() {
+  const estadoVale = _estado;   // si otra ventana cambia el registro mientras se teclea el PIN, no se sigue
   const pend = valesPendientes(_estado.movs, Date.now(), _estado.ajustes.horasAvisoVale);
   if (!pend.length) return toast('No hay vales en camino');
   const close = openSheet(`<div class="tb-pin-title">Vales en camino</div><div class="tb-lines" style="margin-top:10px">${pend.map(v => `<button class="tb-line" data-id="${esc(v.id)}" style="width:100%;text-align:left"><div class="tb-n">${esc(v.extra.vale)} · ${esc(v.persona.nombre)}<div class="tb-m">${fmtFecha(v.ts)} ${fmtHora(v.ts)} · ${v.lineas.length} artículo${v.lineas.length === 1 ? '' : 's'}${v.tarde ? ' · ⏳ hace ' + Math.floor(v.horas) + ' h' : ''}</div></div><div class="tb-q">${totalLineas(v.lineas)}</div></button>`).join('')}</div>`);
@@ -330,6 +358,7 @@ async function abrirRecepcion() {
     const b = ev.target.closest('[data-id]'); if (!b) return;
     const vale = pend.find(v => v.id === b.dataset.id); close();
     const quien = await pedirPin({ titulo: '¿Quién recibe en tienda?' }); if (!quien) return;
+    if (_estado !== estadoVale) return toast('El control de tabaco ha cambiado en otra ventana: vuelve a abrir el vale.', 'red', 4000);
     const recibido = Object.fromEntries(vale.lineas.map(l => [l.ref, l.qty]));
     let nota = '', enviando = false;
     const pinta = () => {

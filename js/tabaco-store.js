@@ -8,23 +8,40 @@ const META = 'tabaco-cadena';
 export function cargar() {
   try { const e = JSON.parse(localStorage.getItem(KEY) || 'null'); return e && e.v === 1 ? e : null; } catch { return null; }
 }
-export function guardar(estado) { localStorage.setItem(KEY, JSON.stringify(estado)); }
+
+// La app puede estar abierta dos veces (la instalada y una pestaña del navegador): las dos
+// escriben en el MISMO `itab`, así que antes de guardar se mira lo que hay en el disco. Si el
+// disco va por delante (más movimientos, u otro último eslabón), no se pisa: se avisa.
+export function guardar(estado) {
+  const disco = cargar();
+  if (disco && ((disco.seq || 0) > (estado.seq || 0) || ((disco.seq || 0) === (estado.seq || 0) && disco.lastHash !== estado.lastHash)))
+    throw new Error('El control de tabaco se ha usado en otra ventana. Recarga la app para seguir.');
+  escribir(estado);
+}
+// Escritura a pelo (sin la comprobación de arriba): solo para crear el módulo, que sustituye
+// a propósito lo que hubiera.
+function escribir(estado) { localStorage.setItem(KEY, JSON.stringify(estado)); }
 
 export async function crear(terminal, pinAdmin) {
   if (!pinValido(pinAdmin)) throw new Error('El PIN de administrador debe tener de 4 a 6 dígitos');
   const salt = nuevoSalt();
   const estado = nuevoEstado(terminal, { salt, hash: await hashPin(pinAdmin, salt) });
-  guardar(estado);
+  escribir(estado);
   try { await setMeta(META, { seq: 0, lastHash: '0', ts: estado.creado }); } catch {}
   return estado;
 }
 
+// Añadir un movimiento: primero se GUARDA una copia con el movimiento dentro y solo si el
+// guardado sale bien se toca el estado que tiene la pantalla delante. Así, si otra ventana se
+// ha adelantado (o localStorage está lleno), no queda nada apuntado en memoria que no esté
+// en el disco.
 export async function registrar(estado, datos) {
   const mov = await crearMovimiento(estado, datos);
+  const movs = [...estado.movs, mov];
+  const nuevo = { ...estado, movs, seq: mov.seq, lastHash: mov.hash, stock: calcularStock(movs) };
+  guardar(nuevo);   // puede lanzar: entonces en memoria no cambia nada
   estado.movs.push(mov);
-  estado.seq = mov.seq; estado.lastHash = mov.hash;
-  estado.stock = calcularStock(estado.movs);
-  guardar(estado);
+  estado.seq = nuevo.seq; estado.lastHash = nuevo.lastHash; estado.stock = nuevo.stock;
   try { await setMeta(META, { seq: mov.seq, lastHash: mov.hash, ts: mov.ts }); } catch {}
   return mov;
 }

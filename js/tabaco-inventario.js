@@ -1,7 +1,7 @@
 // js/tabaco-inventario.js — inventario del almacén de tabaco (con pistola/cámara/buscador) y carga inicial desde Excel
 import { openSheet, closeSheet, openQtySheet, toast, esc } from './ui.js';
 import { diferenciasInventario, parseFilasStock, fmtHora } from './tabaco-core.js';
-import { registrar, guardar } from './tabaco-store.js';
+import { registrar } from './tabaco-store.js';
 import { ensureXLSX } from './tabaco-historico.js';   // la librería de Excel se carga en un solo sitio del módulo
 
 const cont = () => document.getElementById('main');
@@ -12,25 +12,32 @@ const cont = () => document.getElementById('main');
 //  · un inventario sin nada contado no se guarda (teclear el PIN y arrepentirse no deja rastro).
 export async function abrirInventario(ctx) {
   const e = ctx.estado;
+  // Mientras se teclea el PIN, otra ventana puede haber cambiado el registro (y `mount()`
+  // habrá cargado un estado nuevo): entonces lo contado de antes ya no vale, se vuelve a empezar.
+  const mismoEstado = () => {
+    if (ctx.estado === e) return true;
+    toast('El control de tabaco ha cambiado en otra ventana: vuelve a abrir el inventario.', 'red', 4000);
+    return false;
+  };
   const nuevo = quien => ({ personaId: quien.id, personaNombre: quien.nombre, contado: {}, nombres: {}, completo: true, origen: 'app', archivo: '', iniciado: new Date().toISOString() });
   let borr = e.inventarioEnCurso;
   if (borr) {
     const quien = await ctx.pedirPin({ titulo: 'Continuar inventario de ' + borr.personaNombre, sub: 'Teclea tu PIN' });
-    if (!quien) return;
+    if (!quien || !mismoEstado()) return;
     if (quien.id !== borr.personaId) {   // es otra persona: o descarta lo que contó su compañero, o no sigue
       if (!confirm(`Este inventario es de ${borr.personaNombre} (${Object.keys(borr.contado).length} artículos contados). ¿Descartarlo y empezar el tuyo?`)) return;
-      e.inventarioEnCurso = null; guardar(e); borr = nuevo(quien);
+      ctx.estado.inventarioEnCurso = null; ctx.guardar(ctx.estado); borr = nuevo(quien);
     }
   } else {
     const quien = await ctx.pedirPin({ titulo: '¿Quién hace el inventario?' });
-    if (!quien) return;
+    if (!quien || !mismoEstado()) return;
     borr = nuevo(quien);
   }
   // El borrador solo entra en el estado guardado cuando hay algo contado (y sale si se queda sin nada).
   const guardaBorrador = () => {
     if (Object.keys(borr.contado).length) ctx.estado.inventarioEnCurso = borr;
     else if (ctx.estado.inventarioEnCurso === borr) ctx.estado.inventarioEnCurso = null;
-    guardar(ctx.estado);
+    ctx.guardar(ctx.estado);
   };
   const stock = () => ctx.estado.stock || {};
   const apunta = (p, qty) => {
@@ -77,7 +84,7 @@ export async function abrirInventario(ctx) {
         }).join('') : '<div class="tb-empty">Sin stock todavía: pistolea lo que haya o carga el Excel del conteo</div>'}</div>
         <button class="add-btn" id="tb-cerrar" ${contados.length ? '' : 'disabled style="opacity:0.4"'}>Cerrar inventario</button>
       </div>`;
-    document.getElementById('tb-cancel').onclick = () => { if (!contados.length || confirm('¿Cancelar el inventario? Se pierde lo contado.')) { ctx.estado.inventarioEnCurso = null; guardar(ctx.estado); salir(); } };
+    document.getElementById('tb-cancel').onclick = () => { if (!contados.length || confirm('¿Cancelar el inventario? Se pierde lo contado.')) { ctx.estado.inventarioEnCurso = null; ctx.guardar(ctx.estado); salir(); } };
     document.getElementById('tb-completo').onchange = ev => { borr.completo = ev.target.checked; guardaBorrador(); };
     document.getElementById('tb-buscar').onclick = () => ctx.buscarArticulo(contar);
     document.getElementById('tb-excel').onclick = () => cargarExcel(ctx, borr, () => { guardaBorrador(); pinta(); });
@@ -102,7 +109,7 @@ export async function abrirInventario(ctx) {
         const ceros = Object.keys(borr.contado).filter(r => !(borr.contado[r] > 0));
         await registrar(ctx.estado, { tipo: 'inventario', persona: { id: borr.personaId, nombre: borr.personaNombre },
           lineas, extra: { completo: borr.completo, origen: borr.origen || 'app', archivo: borr.archivo || '', ceros, diferencias: difs } });
-        ctx.estado.inventarioEnCurso = null; guardar(ctx.estado);
+        ctx.estado.inventarioEnCurso = null; ctx.guardar(ctx.estado);
         closeSheet();
         toast(conDif.length ? `Inventario cerrado: ${conDif.length} descuadre${conDif.length === 1 ? '' : 's'} apuntado${conDif.length === 1 ? '' : 's'}` : 'Inventario cerrado: todo cuadra', conDif.length ? 'red' : 'green', 3500);
         salir();
