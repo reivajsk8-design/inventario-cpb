@@ -2,20 +2,9 @@
 import { openSheet, closeSheet, openQtySheet, toast, esc } from './ui.js';
 import { diferenciasInventario, parseFilasStock, fmtHora } from './tabaco-core.js';
 import { registrar, guardar } from './tabaco-store.js';
+import { ensureXLSX } from './tabaco-historico.js';   // la librería de Excel se carga en un solo sitio del módulo
 
 const cont = () => document.getElementById('main');
-
-// La librería de Excel solo se baja si de verdad se va a cargar un Excel (igual que en Conteos/Resumen).
-function ensureXLSX() {
-  return new Promise((resolve, reject) => {
-    if (window.XLSX) return resolve(window.XLSX);
-    const s = document.createElement('script');
-    s.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
-    s.onload = () => resolve(window.XLSX);
-    s.onerror = () => reject(new Error('No se pudo cargar la librería de Excel (¿sin internet?)'));
-    document.head.appendChild(s);
-  });
-}
 
 // Inventario del almacén: se cuenta pistoleando (cada lectura SUMA) y al cerrar el stock queda
 // EXACTAMENTE en lo contado. Dos reglas iguales que en la salida/entrada:
