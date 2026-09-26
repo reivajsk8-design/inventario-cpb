@@ -111,7 +111,7 @@ function renderSetup() {
 export function renderInicio() {
   if (!_estado) return renderSetup();
   _onEan = null;
-  const e = _estado, stock = e.stock || {}, total = Object.values(stock).reduce((a, b) => a + b, 0);
+  const e = _estado, stock = e.stock || {}, total = Object.values(stock).reduce((a, b) => a + b, 0), nRefs = Object.keys(stock).length;
   const an = anulados(e.movs), salidas = e.movs.filter(m => m.tipo === 'salida' && !an.has(m.id)), ult = salidas[salidas.length - 1];
   const pend = valesPendientes(e.movs, Date.now(), e.ajustes.horasAvisoVale), desc = descuadres(e.movs).filter(d => d.estado === 'pendiente');
   const borradorS = e.salidaEnCurso && e.salidaEnCurso.lineas.length, borradorE = e.entradaEnCurso && e.entradaEnCurso.lineas.length, borradorI = e.inventarioEnCurso && Object.keys(e.inventarioEnCurso.contado).length;
@@ -119,7 +119,7 @@ export function renderInicio() {
     <div class="tb-wrap">
       <div class="tb-banner ${_integridad.ok ? 'ok' : 'bad'}" id="tb-integ">${_integridad.ok ? `✔ Registro íntegro · ${e.movs.length} movimientos · Terminal ${esc(e.terminal)}` : `⚠ Registro alterado: ${esc(_integridad.problemas.join(' · '))}`}</div>
       <div class="tb-cards">
-        <div class="tb-card"><div class="tb-k">Stock almacén</div><div class="tb-v">${total}</div><div class="tb-s">uds en ${Object.keys(stock).length} artículos</div></div>
+        <div class="tb-card"><div class="tb-k">Stock almacén</div><div class="tb-v">${total}</div><div class="tb-s">uds en ${nRefs} artículo${nRefs === 1 ? '' : 's'}</div></div>
         <div class="tb-card"><div class="tb-k">Última salida</div><div class="tb-v" style="font-size:1rem">${ult ? esc(ult.persona.nombre) : '—'}</div><div class="tb-s">${ult ? `${fmtFecha(ult.ts)} ${fmtHora(ult.ts)} · ${totalLineas(ult.lineas)} uds · ${esc(ult.extra.vale)}` : 'todavía ninguna'}</div></div>
       </div>
       ${desc.length ? `<div class="tb-alert">⚠ ${desc.length} descuadre${desc.length === 1 ? '' : 's'} pendiente${desc.length === 1 ? '' : 's'} de regularizar</div>` : ''}
