@@ -4,7 +4,7 @@ import { openSheet, closeSheet, openQtySheet, toast, esc } from './ui.js';
 import { startScanner } from './scanner.js';
 import { matchesEan, openAssignEanSheet } from './eans.js';
 import { cameraSupported, openCamera, closeCamera, resumeCamera, beepError, beepMatch } from './camera-scanner.js';
-import { esTabaco, infoRefs, valesPendientes, descuadres, totalLineas, fmtFecha, fmtHora, siguienteVale, pinValido } from './tabaco-core.js';
+import { esTabaco, infoRefs, valesPendientes, descuadres, anulados, totalLineas, fmtFecha, fmtHora, siguienteVale, pinValido } from './tabaco-core.js';
 import { cargar, guardar, crear, registrar, verificarIntegridad, buscarPersonaPorPin, esAdminPin } from './tabaco-store.js';
 import { abrirInventario } from './tabaco-inventario.js';
 import { abrirStock, abrirDescuadres, abrirHistorico, abrirAjustes } from './tabaco-historico.js';
@@ -46,6 +46,7 @@ export async function mount() {
 
 export function unmount() {
   closeCamera(); _onEan = null;
+  startScanner(null);   // suelta la pistola: si no, seguiría leyendo en Lista, Resumen…
   const navBtn = document.getElementById('btn-nav-right');
   navBtn.textContent = '?'; navBtn.onclick = navBtn._tutorialHandler || null;
 }
@@ -53,7 +54,14 @@ export function unmount() {
 function manejarEan(ean, onDone) {
   if (!_onEan) { beepError(); toast('Abre una salida, entrada o inventario para escanear'); return; }
   const p = _all.find(x => matchesEan(x, ean));
-  if (!p) { beepError(); openAssignEanSheet(ean, _all, prod => { _onEan(prod); onDone && onDone(); }); return; }
+  if (!p) {
+    beepError();
+    // Siga como siga la hoja (asignar el EAN o cerrarla), hay que reanudar la cámara una sola vez.
+    let hecho = false;
+    const seguir = () => { if (hecho) return; hecho = true; onDone && onDone(); };
+    openAssignEanSheet(ean, _all, prod => { _onEan(prod); seguir(); }, seguir);
+    return;
+  }
   beepMatch(); _onEan(p); onDone && onDone();
 }
 
@@ -65,7 +73,10 @@ function catalogo() {
   return tab.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
 }
 
-async function refrescar() { _integridad = await verificarIntegridad(_estado); renderInicio(); }
+async function refrescar() {
+  if (!_estado) { renderInicio(); return; }   // sin control creado todavía: el inicio enseña el setup
+  _integridad = await verificarIntegridad(_estado); renderInicio();
+}
 
 // ---------- setup ----------
 function renderSetup() {
@@ -98,7 +109,7 @@ export function renderInicio() {
   if (!_estado) return renderSetup();
   _onEan = null;
   const e = _estado, stock = e.stock || {}, total = Object.values(stock).reduce((a, b) => a + b, 0);
-  const salidas = e.movs.filter(m => m.tipo === 'salida'), ult = salidas[salidas.length - 1];
+  const an = anulados(e.movs), salidas = e.movs.filter(m => m.tipo === 'salida' && !an.has(m.id)), ult = salidas[salidas.length - 1];
   const pend = valesPendientes(e.movs, Date.now(), e.ajustes.horasAvisoVale), desc = descuadres(e.movs).filter(d => d.estado === 'pendiente');
   const borradorS = e.salidaEnCurso && e.salidaEnCurso.lineas.length, borradorI = e.inventarioEnCurso && Object.keys(e.inventarioEnCurso.contado).length;
   cont().innerHTML = `
@@ -142,7 +153,7 @@ export function pedirPin({ admin = false, titulo = '¿Quién eres?', sub = 'Tecl
       <div class="tb-pin-dots" id="tb-dots">${'<i></i>'.repeat(6)}</div>
       <div class="numpad" id="tb-np">
         ${[1,2,3,4,5,6,7,8,9].map(n => `<button class="np-btn" data-n="${n}">${n}</button>`).join('')}
-        <button class="np-btn" data-n="del">⌫</button><button class="np-btn zero" data-n="0">0</button><button class="np-btn confirm" data-n="ok">✓</button>
+        <button class="np-btn" data-n="del">⌫</button><button class="np-btn" data-n="0">0</button><button class="np-btn confirm" data-n="ok">✓</button>
       </div>`, () => { if (!resuelto) { resuelto = true; resolve(null); } });
     const pinta = () => document.querySelectorAll('#tb-dots i').forEach((d, i) => d.classList.toggle('on', i < pin.length));
     document.getElementById('tb-np').addEventListener('click', async e => {

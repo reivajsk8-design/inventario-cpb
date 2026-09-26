@@ -69,6 +69,7 @@
 
 /* ── FILTER BAR ── */
 .filter-bar { padding: 8px 12px 0; }
+#filter-bar.hidden { display: none; }
 .search-input-wrap {
   background: rgba(255,255,255,0.08);
   border-radius: var(--radius-md);
