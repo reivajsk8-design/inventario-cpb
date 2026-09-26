@@ -151,6 +151,7 @@ async function cargarExcel(ctx, borr, repinta) {
       for (const r of res.ceros) if (tabaco.has(r)) borr.contado[r] = 0;   // los ceros, solo del tabaco
       borr.completo = true; borr.origen = 'excel'; borr.archivo = f.name;
       toast(`Excel cargado: ${cargados} artículos con stock`
+        + (res.saltadas ? ` · ${res.saltadas} fila${res.saltadas === 1 ? '' : 's'} sin cantidad, no cargada${res.saltadas === 1 ? '' : 's'}` : '')
         + (noTabaco.length ? ` · ${noTabaco.length} ignorados por no ser tabaco` : '')
         + (desconocidas.length ? ` · ${desconocidas.length} no están en el catálogo (${desconocidas.slice(0, 5).join(', ')}${desconocidas.length > 5 ? '…' : ''})` : '')
         + '. Revisa y pulsa «Cerrar inventario».', (desconocidas.length || noTabaco.length) ? 'red' : 'green', 5000);

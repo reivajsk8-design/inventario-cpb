@@ -109,9 +109,23 @@ test('parseFilasStock: export de Conteos (REF + Almacén) y Proxium (Artículo +
   const a = parseFilasStock(conteos);
   assert.deepEqual(a.lineas, [{ ref: 'MARG40', name: 'CARTON MARLBORO GOLD 3.0', ean: '7622100912392', qty: 79 }]);
   assert.deepEqual(a.ceros, ['TERW20']);
+  assert.equal(a.saltadas, 0);
   const proxium = [['Listado: Inventario'], [], ['Artículo', 'Descripción', 'Bultos', 'Cantidad', 'Un. cant.'], ['CAMF20', 'CARTON CAMEL BLUE', '3', '112', 'CT'], ['', '', '', '', '']];
   assert.deepEqual(parseFilasStock(proxium).lineas, [{ ref: 'CAMF20', name: 'CARTON CAMEL BLUE', ean: '', qty: 112 }]);
   assert.throws(() => parseFilasStock([['Hola', 'Mundo'], [1, 2]]), /cabecera/);
+});
+
+test('parseFilasStock: la celda de cantidad vacía se salta (no es un 0); el 0 explícito sí cuenta', () => {
+  const rows = [['REF', 'Nombre', 'EAN', 'Almacén'],
+    ['MARG40', 'CARTON MARLBORO GOLD', '7622100912392', ''],        // sin contar: se salta
+    ['CAMY40', 'CARTON CAMEL YELLOW', '7630073602394', '0'],        // contado y no hay: cero
+    ['CHEST20', 'CARTON CHESTERFIELD', '7622100992950', '5'],
+    ['TERW20', 'CARTON TEREA WARM', '', '   '],                     // solo espacios: también se salta
+    ['BADQ', 'CARTON RARO', '', 'no sé']];                          // cantidad ilegible: se salta
+  const r = parseFilasStock(rows);
+  assert.deepEqual(r.lineas, [{ ref: 'CHEST20', name: 'CARTON CHESTERFIELD', ean: '7622100992950', qty: 5 }]);
+  assert.deepEqual(r.ceros, ['CAMY40']);
+  assert.equal(r.saltadas, 3);
 });
 
 test('infoRefs recuerda el último nombre y EAN visto por ref', async () => {

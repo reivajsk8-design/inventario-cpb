@@ -141,14 +141,19 @@ export function parseFilasStock(rows) {
     const iQty = QTY.map(q => h.indexOf(q)).find(x => x >= 0); if (iQty === undefined) continue;
     const iNom = NOM.map(q => h.indexOf(q)).find(x => x >= 0), iEan = h.indexOf('ean');
     const lineas = [], ceros = [];
+    let saltadas = 0;
     for (const r of rows.slice(i + 1)) {
       const ref = norm(r[iRef]); if (!ref) continue;
-      const q = Math.trunc(Number(norm(r[iQty] ?? '0').replace(',', '.')));
-      if (!Number.isFinite(q) || q < 0) continue;
+      // Celda de cantidad VACÍA (el Excel no dice cuántos hay) no es lo mismo que un 0
+      // («los he contado y no hay ninguno»): esa fila se salta, no se carga como cero.
+      const cruda = r[iQty];
+      if (cruda === '' || cruda === null || cruda === undefined || norm(cruda) === '') { saltadas++; continue; }
+      const q = Math.trunc(Number(norm(cruda).replace(',', '.')));
+      if (!Number.isFinite(q) || q < 0) { saltadas++; continue; }
       const l = { ref, name: iNom !== undefined ? norm(r[iNom]) : '', ean: iEan >= 0 ? norm(r[iEan]) : '', qty: q };
       if (q > 0) lineas.push(l); else ceros.push(ref);
     }
-    return { lineas, ceros, cabecera: i + 1 };
+    return { lineas, ceros, saltadas, cabecera: i + 1 };
   }
   throw new Error('No encontré la cabecera: espero "REF + Almacén" (export de Conteos) o "Artículo + Cantidad" (Proxium)');
 }
