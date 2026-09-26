@@ -219,6 +219,16 @@ function buscarArticulo(onElegido, { soloConStock = false } = {}) {
   pinta();
 }
 
+// Las líneas de una salida se comprueban contra el stock al ponerlas, pero un borrador de ayer
+// (o un inventario de por medio) puede dejarlas por encima de lo que hay AHORA. Devuelve las
+// líneas que se pasan, sumando por artículo.
+function lineasQueSePasan(lineas, stock) {
+  const porRef = {};
+  for (const l of lineas) porRef[l.ref] = (porRef[l.ref] || 0) + l.qty;
+  return Object.keys(porRef).filter(ref => porRef[ref] > (stock[ref] || 0))
+    .map(ref => ({ ref, pide: porRef[ref], hay: stock[ref] || 0, name: (lineas.find(l => l.ref === ref) || {}).name || ref }));
+}
+
 // ---------- salida a tienda / entrada al almacén ----------
 // La misma pantalla sirve para las dos: una lista de líneas que se llena pistoleando.
 // Cada línea se guarda en el borrador (`salidaEnCurso` / `entradaEnCurso`), así que si el
@@ -248,6 +258,12 @@ async function abrirMovimiento(tipo) {
     const quien = await pedirPin({ titulo: tipo === 'salida' ? '¿Quién saca el tabaco?' : '¿Quién registra la entrada?' });
     if (!quien || !mismoEstado()) return;
     borr = nuevo(quien);
+  }
+  // Retomar un borrador de salida de hace rato: si entre medias ha bajado el stock (o se ha
+  // contado el almacén), se avisa una vez para que se ajusten las líneas antes de confirmar.
+  if (tipo === 'salida' && borr.lineas.length) {
+    const malas = lineasQueSePasan(borr.lineas, _estado.stock || {});
+    if (malas.length) toast(`Ojo: el borrador pide más de lo que hay ahora en el almacén (${malas.map(m => `${m.name}: lleva ${m.pide}, hay ${m.hay}`).join(' · ')}). Ajusta las líneas.`, 'red', 5000);
   }
   // El borrador solo entra en el estado guardado cuando tiene líneas (y sale al quedarse sin ellas).
   const guardaBorrador = () => {
@@ -298,6 +314,16 @@ async function abrirMovimiento(tipo) {
   };
   const confirmar = async () => {
     if (!borr.lineas.length || enviando) return;
+    if (tipo === 'salida') {   // último control: del almacén no puede salir lo que no hay
+      const malas = lineasQueSePasan(borr.lineas, stock());
+      if (malas.length) {
+        const m = malas[0];
+        beepError();
+        toast(`No se puede confirmar: de ${m.name} solo hay ${m.hay} en el almacén (la salida lleva ${m.pide}). Ajusta la línea.`, 'red', 5000);
+        pinta();
+        return;
+      }
+    }
     enviando = true;
     try {
       const persona = { id: borr.personaId, nombre: borr.personaNombre };
