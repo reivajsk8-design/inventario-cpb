@@ -389,6 +389,7 @@ export async function abrirAjustes(ctx) {
         ${seccion('Estado del registro', `
           <div class="tb-banner ${integ.ok ? 'ok' : 'bad'}">${integ.error ? '⚠ No se pudo comprobar el registro: ' + esc(integ.error)
             : integ.ok ? `✔ todo correcto · ${plural(integ.n, 'movimiento', 'movimientos')}` : '⚠ ' + esc((integ.problemas || []).join(' · '))}</div>
+          ${(ctx.anterior && ctx.anterior()) ? `<div class="tb-alert">⚠ ${esc(ctx.anterior())}</div>` : ''}
           <div class="tb-card"><div class="tb-s">creado el ${fmtFecha(e.creado)} · Terminal ${esc(e.terminal)}</div></div>`)}
         ${seccion('Borrar', `
           <div class="tb-card"><div class="tb-s">${copiaHecha ? 'Ya tienes la copia de esta sesión: puedes borrar.' : 'Baja primero la copia de seguridad (arriba) para poder borrar.'}</div></div>
@@ -432,10 +433,10 @@ export async function abrirAjustes(ctx) {
     };
     document.getElementById('tb-pin-admin').onclick = () => hojaPinNuevo('PIN de administrador', 'Teclea el PIN nuevo dos veces', pin => cambiarPinAdmin(ctx.estado, pin));
     document.getElementById('tb-copia').onclick = () => descargarCopia();
-    document.getElementById('tb-borrar').onclick = () => {
+    document.getElementById('tb-borrar').onclick = async () => {
       if (!copiaHecha) return;
       if (!confirm('Se borra TODO el control de tabaco de este móvil: movimientos, personas, PIN y stock. No se puede deshacer. ¿Ya tienes guardada la copia JSON?')) return;
-      borrarModulo();
+      await borrarModulo();   // deja apuntado en IndexedDB cuántos movimientos había
       location.reload();
     };
   }

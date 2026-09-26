@@ -4,6 +4,7 @@ import { getMeta, setMeta } from './db.js';
 
 export const KEY = 'itab';
 const META = 'tabaco-cadena';
+const META_ANT = 'tabaco-cadena-anterior';   // rastro de un registro que hubo antes en este móvil
 
 export function cargar() {
   try { const e = JSON.parse(localStorage.getItem(KEY) || 'null'); return e && e.v === 1 ? e : null; } catch { return null; }
@@ -22,10 +23,25 @@ export function guardar(estado) {
 // a propósito lo que hubiera.
 function escribir(estado) { localStorage.setItem(KEY, JSON.stringify(estado)); }
 
+// Borrar el módulo y volver a crearlo dejaba el registro a cero sin que nadie lo notara. Antes
+// de reiniciar se apunta en IndexedDB cuántos movimientos había y cuándo fue el último: ese
+// rastro sale en el inicio y en Ajustes, y no se puede quitar desde la app.
+async function apuntarRegistroAnterior() {
+  let actual = null;
+  try { actual = await getMeta(META); } catch {}
+  if (!actual || !(actual.seq > 0)) return;
+  let ant = null;
+  try { ant = await getMeta(META_ANT); } catch {}
+  if (ant && (ant.seq || 0) >= actual.seq) return;   // se queda el registro más largo que hubo
+  try { await setMeta(META_ANT, { seq: actual.seq, lastHash: actual.lastHash, ts: actual.ts, guardado: new Date().toISOString() }); } catch {}
+}
+export async function registroAnterior() { try { return await getMeta(META_ANT); } catch { return null; } }
+
 export async function crear(terminal, pinAdmin) {
   if (!pinValido(pinAdmin)) throw new Error('El PIN de administrador debe tener de 4 a 6 dígitos');
   const salt = nuevoSalt();
   const estado = nuevoEstado(terminal, { salt, hash: await hashPin(pinAdmin, salt) });
+  await apuntarRegistroAnterior();
   escribir(estado);
   try { await setMeta(META, { seq: 0, lastHash: '0', ts: estado.creado }); } catch {}
   return estado;
@@ -93,4 +109,8 @@ export async function cambiarPinAdmin(estado, pin) {
   const salt = nuevoSalt(); estado.admin = { salt, hash: await hashPin(pin, salt) }; guardar(estado);
 }
 export function exportarCopia(estado) { return JSON.stringify({ exportado: new Date().toISOString(), ...estado }, null, 1); }
-export function borrarModulo() { localStorage.removeItem(KEY); }
+export async function borrarModulo() {
+  await apuntarRegistroAnterior();
+  localStorage.removeItem(KEY);
+  try { await setMeta(META, { seq: 0, lastHash: '0', ts: new Date().toISOString() }); } catch {}
+}

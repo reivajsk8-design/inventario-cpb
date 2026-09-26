@@ -5,12 +5,21 @@ import { startScanner } from './scanner.js';
 import { matchesEan, openAssignEanSheet } from './eans.js';
 import { cameraSupported, openCamera, closeCamera, resumeCamera, beepError, beepMatch } from './camera-scanner.js';
 import { esTabaco, infoRefs, valesPendientes, descuadres, anulados, totalLineas, fmtFecha, fmtHora, siguienteVale, pinValido } from './tabaco-core.js';
-import { cargar, guardar, crear, registrar, verificarIntegridad, buscarPersonaPorPin, esAdminPin, KEY } from './tabaco-store.js';
+import { cargar, guardar, crear, registrar, verificarIntegridad, buscarPersonaPorPin, esAdminPin, registroAnterior, KEY } from './tabaco-store.js';
 import { abrirInventario } from './tabaco-inventario.js';
 import { abrirStock, abrirDescuadres, abrirHistorico, abrirAjustes, compartirTexto } from './tabaco-historico.js';
 
 const TERMINALS = ['D', 'MSC', 'E'];
 let _estado = null, _all = [], _integridad = { ok: true, problemas: [], n: 0 }, _onEan = null, _onCam = null, _pinFallos = 0, _pinBloqueoHasta = 0;
+let _anterior = null;   // rastro de un registro que hubo antes en este móvil (si lo hay)
+
+// Frase del rastro del registro anterior, para el inicio y para Ajustes.
+export function textoRegistroAnterior(ant) {
+  if (!ant || !(ant.seq > 0)) return '';
+  const cuando = ant.ts || ant.guardado;
+  return `Este móvil tuvo un registro anterior de ${ant.seq} movimiento${ant.seq === 1 ? '' : 's'}`
+    + (cuando ? ` (último ${fmtFecha(cuando)} ${fmtHora(cuando)})` : '');
+}
 
 const cont = () => document.getElementById('main');
 
@@ -31,6 +40,7 @@ export const ctx = {
   buscarArticulo,
   setOnEan: fn => { _onEan = fn; },
   guardar: guardaAviso,   // guardar avisando si otra ventana se ha adelantado
+  anterior: () => textoRegistroAnterior(_anterior),   // rastro de un registro anterior (o '')
   toast, esc,
 };
 
@@ -50,6 +60,7 @@ export async function mount() {
   _all = [...raw, ...newArts].map(p => editOvr[p.ref] ? { ...p, ...editOvr[p.ref] } : p);
   _estado = cargar();
   if (_estado) _integridad = await verificarIntegridad(_estado);
+  _anterior = await registroAnterior();
 
   const navBtn = document.getElementById('btn-nav-right');
   if (cameraSupported()) {
@@ -97,6 +108,7 @@ function catalogo() {
 }
 
 async function refrescar() {
+  _anterior = await registroAnterior();
   if (!_estado) { renderInicio(); return; }   // sin control creado todavía: el inicio enseña el setup
   _integridad = await verificarIntegridad(_estado); renderInicio();
 }
@@ -107,6 +119,7 @@ function renderSetup() {
   cont().innerHTML = `
     <div class="tb-wrap">
       <div class="tb-head"><h2>🚬 Control de tabaco del almacén</h2></div>
+      ${textoRegistroAnterior(_anterior) ? `<div class="tb-alert">⚠ ${esc(textoRegistroAnterior(_anterior))}</div>` : ''}
       <div class="tb-card"><div class="tb-k">Primera vez en este móvil</div>
         <div class="tb-s" style="margin-top:6px">Crea el PIN de administrador (de 4 a 6 dígitos). Con él darás de alta a las personas que sacan tabaco, regularizarás descuadres y verás los ajustes. Guárdalo bien: no se puede recuperar.</div></div>
       <label class="tb-k" style="font-size:0.75rem">Terminal</label>
@@ -142,6 +155,7 @@ export function renderInicio() {
         <div class="tb-card"><div class="tb-k">Stock almacén</div><div class="tb-v">${total}</div><div class="tb-s">uds en ${nRefs} artículo${nRefs === 1 ? '' : 's'}</div></div>
         <div class="tb-card"><div class="tb-k">Última salida</div><div class="tb-v" style="font-size:1rem">${ult ? esc(ult.persona.nombre) : '—'}</div><div class="tb-s">${ult ? `${fmtFecha(ult.ts)} ${fmtHora(ult.ts)} · ${totalLineas(ult.lineas)} uds · ${esc(ult.extra.vale)}` : 'todavía ninguna'}</div></div>
       </div>
+      ${textoRegistroAnterior(_anterior) ? `<div class="tb-alert">⚠ ${esc(textoRegistroAnterior(_anterior))}</div>` : ''}
       ${desc.length ? `<div class="tb-alert">⚠ ${desc.length} descuadre${desc.length === 1 ? '' : 's'} pendiente${desc.length === 1 ? '' : 's'} de regularizar</div>` : ''}
       ${pend.filter(v => v.tarde).length ? `<div class="tb-alert">⏳ ${pend.filter(v => v.tarde).map(v => `${esc(v.extra.vale)} (${esc(v.persona.nombre)}, hace ${Math.floor(v.horas)} h)`).join(', ')} sin confirmar en tienda</div>` : ''}
       <div class="tb-actions">
