@@ -137,20 +137,34 @@ async function cargarExcel(ctx, borr, repinta) {
       const XLSX = await ensureXLSX();
       const wb = XLSX.read(await f.arrayBuffer(), { type: 'array' });
       let res = null, err = null;
-      for (const nombre of wb.SheetNames) {   // vale cualquier hoja: se prueban todas hasta que una tenga la cabecera
-        try { res = parseFilasStock(XLSX.utils.sheet_to_json(wb.Sheets[nombre], { header: 1, raw: true, defval: '' })); break; } catch (e2) { err = e2; }
+      for (const nombre of wb.SheetNames) {   // se prueban todas las hojas: una con solo la cabecera no corta la búsqueda
+        try {
+          const r = parseFilasStock(XLSX.utils.sheet_to_json(wb.Sheets[nombre], { header: 1, raw: true, defval: '' }));
+          res = r;
+          if (r.lineas.length || r.ceros.length) break;
+        } catch (e2) { err = e2; }
       }
-      if (!res) throw err;
-      const cat = ctx.catalogo(), desconocidas = [];
+      if (!res) throw err || new Error('El Excel no tiene filas con datos');
+      if (!res.lineas.length && !res.ceros.length) throw new Error('El Excel no tiene filas con datos');
+      // Este inventario es SOLO del tabaco del almacén: un export del stock entero (miles de
+      // artículos, casi todos a 0) no puede colarse en el conteo ni en el movimiento.
+      const tabaco = new Map(ctx.catalogo().map(p => [p.ref, p]));
+      const desconocidas = [], noTabaco = [];
+      let cargados = 0;
       for (const l of res.lineas) {
-        const p = cat.find(x => x.ref === l.ref);
+        const p = tabaco.get(l.ref);
+        if (!p && ctx.producto(l.ref)) { noTabaco.push(l.ref); continue; }   // la app lo conoce y NO es tabaco: fuera
         borr.contado[l.ref] = l.qty;
         borr.nombres[l.ref] = { name: (p && p.name) || l.name || l.ref, ean: (p && p.ean) || l.ean || '' };
         if (!p) desconocidas.push(l.ref);
+        cargados++;
       }
-      for (const r of res.ceros) borr.contado[r] = 0;
+      for (const r of res.ceros) if (tabaco.has(r)) borr.contado[r] = 0;   // los ceros, solo del tabaco
       borr.completo = true; borr.origen = 'excel'; borr.archivo = f.name;
-      toast(`Excel cargado: ${res.lineas.length} artículos con stock${desconocidas.length ? ` · ${desconocidas.length} no están en el catálogo (${desconocidas.slice(0, 5).join(', ')}${desconocidas.length > 5 ? '…' : ''})` : ''}. Revisa y pulsa «Cerrar inventario».`, desconocidas.length ? 'red' : 'green', 5000);
+      toast(`Excel cargado: ${cargados} artículos con stock`
+        + (noTabaco.length ? ` · ${noTabaco.length} ignorados por no ser tabaco` : '')
+        + (desconocidas.length ? ` · ${desconocidas.length} no están en el catálogo (${desconocidas.slice(0, 5).join(', ')}${desconocidas.length > 5 ? '…' : ''})` : '')
+        + '. Revisa y pulsa «Cerrar inventario».', (desconocidas.length || noTabaco.length) ? 'red' : 'green', 5000);
       repinta();
     } catch (e) { toast((e && e.message) || 'No se pudo leer el Excel', 'red', 4000); }
   };

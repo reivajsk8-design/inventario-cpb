@@ -17,6 +17,7 @@ const cont = () => document.getElementById('main');
 export const ctx = {
   get estado() { return _estado; },
   catalogo,
+  producto: ref => _all.find(p => p.ref === ref) || null,   // ¿conoce la app esta REF? (aunque no sea tabaco)
   info: () => infoRefs(_estado.movs),
   pedirPin,
   refrescar,
