@@ -105,7 +105,7 @@ C:\Inventario CPB\Inventario CPB\
 | `itab` | `{ v:1, terminal, admin:{salt,hash}, personas[], movs[], stock, seq, lastHash, ajustes, …EnCurso }` | Control de tabaco del almacén: personas con PIN (solo salt + hash, nunca en claro), movimientos encadenados por hash (inmutables), stock derivado y borradores de salida/entrada/inventario |
 
 **IndexedDB** (`inventario-cpb`): `products` (keyPath `ref`), `albaranes`, `albaran_photos`, `meta`
-En `meta`, la clave **`tabaco-cadena`** guarda `{seq, lastHash}` del último movimiento del tabaco: es la segunda copia del eslabón, la que delata que alguien ha recortado `itab` desde el navegador.
+En `meta`, la clave **`tabaco-cadena`** guarda `{seq, lastHash, ts}` del último movimiento del tabaco: es la segunda copia del eslabón, la que delata que alguien ha recortado `itab` desde el navegador.
 
 ---
 
