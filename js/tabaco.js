@@ -204,6 +204,21 @@ export function renderInicio() {
 }
 
 // ---------- PIN ----------
+// El bloqueo por 5 fallos se guarda en el estado (`ajustes.pinBloqueoHasta`): si solo viviera en
+// memoria, recargar la app (o cerrarla y abrirla) lo borraba y se podían seguir probando PINes
+// de 4 en 4 segundos.
+function bloqueoHasta() {
+  const guardado = (_estado && _estado.ajustes && Number(_estado.ajustes.pinBloqueoHasta)) || 0;
+  return Math.max(_pinBloqueoHasta, guardado);
+}
+function ponBloqueo(hasta) {
+  _pinBloqueoHasta = hasta;
+  if (!_estado) return;
+  _estado.ajustes = _estado.ajustes || {};
+  _estado.ajustes.pinBloqueoHasta = hasta;
+  guardaAviso(_estado);
+}
+
 // Devuelve la persona identificada, 'admin' si admin:true y el PIN es el de administrador, o null si se cierra.
 export function pedirPin({ admin = false, titulo = '¿Quién eres?', sub = 'Teclea tu PIN' } = {}) {
   return new Promise(resolve => {
@@ -219,15 +234,15 @@ export function pedirPin({ admin = false, titulo = '¿Quién eres?', sub = 'Tecl
     const pinta = () => document.querySelectorAll('#tb-dots i').forEach((d, i) => d.classList.toggle('on', i < pin.length));
     document.getElementById('tb-np').addEventListener('click', async e => {
       const n = e.target.dataset.n; if (!n) return;
-      if (Date.now() < _pinBloqueoHasta) { document.getElementById('tb-pin-sub').textContent = `Demasiados intentos: espera ${Math.ceil((_pinBloqueoHasta - Date.now()) / 1000)} s`; return; }
+      if (Date.now() < bloqueoHasta()) { document.getElementById('tb-pin-sub').textContent = `Demasiados intentos: espera ${Math.ceil((bloqueoHasta() - Date.now()) / 1000)} s`; return; }
       if (n === 'del') { pin = pin.slice(0, -1); pinta(); return; }
       if (n !== 'ok') { if (pin.length < 6) pin += n; pinta(); return; }
       if (!pinValido(pin)) { document.getElementById('tb-pin-sub').textContent = 'El PIN tiene de 4 a 6 dígitos'; return; }
       const quien = admin ? (await esAdminPin(_estado, pin) ? 'admin' : null) : await buscarPersonaPorPin(_estado, pin);
       if (!quien) {
         _pinFallos++; pin = ''; pinta(); beepError();
-        if (_pinFallos >= 5) { _pinBloqueoHasta = Date.now() + 30000; _pinFallos = 0; }
-        document.getElementById('tb-pin-sub').textContent = _pinBloqueoHasta > Date.now() ? 'Demasiados intentos: espera 30 s' : 'PIN no reconocido'; return;
+        if (_pinFallos >= 5) { ponBloqueo(Date.now() + 30000); _pinFallos = 0; }
+        document.getElementById('tb-pin-sub').textContent = bloqueoHasta() > Date.now() ? 'Demasiados intentos: espera 30 s' : 'PIN no reconocido'; return;
       }
       _pinFallos = 0; resuelto = true; close(); resolve(quien);
     });
