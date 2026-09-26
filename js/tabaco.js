@@ -7,7 +7,7 @@ import { cameraSupported, openCamera, closeCamera, resumeCamera, beepError, beep
 import { esTabaco, infoRefs, valesPendientes, descuadres, anulados, totalLineas, fmtFecha, fmtHora, siguienteVale, pinValido } from './tabaco-core.js';
 import { cargar, guardar, crear, registrar, verificarIntegridad, buscarPersonaPorPin, esAdminPin } from './tabaco-store.js';
 import { abrirInventario } from './tabaco-inventario.js';
-import { abrirStock, abrirDescuadres, abrirHistorico, abrirAjustes } from './tabaco-historico.js';
+import { abrirStock, abrirDescuadres, abrirHistorico, abrirAjustes, compartirTexto } from './tabaco-historico.js';
 
 const TERMINALS = ['D', 'MSC', 'E'];
 let _estado = null, _all = [], _integridad = { ok: true, problemas: [], n: 0 }, _onEan = null, _onCam = null, _pinFallos = 0, _pinBloqueoHasta = 0;
@@ -51,18 +51,20 @@ export function unmount() {
   navBtn.textContent = '?'; navBtn.onclick = navBtn._tutorialHandler || null;
 }
 
+// Una lectura (pistola o cámara). `onDone` reanuda la cámara: la pantalla que escucha
+// (`_onEan`) recibe el artículo y decide cuándo ha terminado (al confirmar la cantidad).
 function manejarEan(ean, onDone) {
   if (!_onEan) { beepError(); toast('Abre una salida, entrada o inventario para escanear'); return; }
   const p = _all.find(x => matchesEan(x, ean));
+  // Siga como siga la lectura (cantidad confirmada, asignar el EAN o cerrar la hoja), hay que reanudar la cámara una sola vez.
+  let hecho = false;
+  const seguir = () => { if (hecho) return; hecho = true; onDone && onDone(); };
   if (!p) {
     beepError();
-    // Siga como siga la hoja (asignar el EAN o cerrarla), hay que reanudar la cámara una sola vez.
-    let hecho = false;
-    const seguir = () => { if (hecho) return; hecho = true; onDone && onDone(); };
-    openAssignEanSheet(ean, _all, prod => { _onEan(prod); seguir(); }, seguir);
+    openAssignEanSheet(ean, _all, prod => { _onEan(prod, seguir); }, seguir);
     return;
   }
-  beepMatch(); _onEan(p); onDone && onDone();
+  beepMatch(); _onEan(p, seguir);
 }
 
 function catalogo() {
@@ -196,6 +198,144 @@ function buscarArticulo(onElegido, { soloConStock = false } = {}) {
   pinta();
 }
 
-function abrirSalida() { toast('Pendiente'); }
-function abrirEntrada() { toast('Pendiente'); }
-function abrirRecepcion() { toast('Pendiente'); }
+// ---------- salida a tienda / entrada al almacén ----------
+// La misma pantalla sirve para las dos: una lista de líneas que se llena pistoleando.
+// Todo se guarda en el borrador (`salidaEnCurso` / `entradaEnCurso`) en cuanto cambia,
+// así que si el móvil se apaga o se cambia de pestaña, la salida se retoma donde iba.
+// tipo: 'salida' | 'entrada'
+async function abrirMovimiento(tipo) {
+  const e = _estado, clave = tipo === 'salida' ? 'salidaEnCurso' : 'entradaEnCurso';
+  let borr = e[clave];
+  if (!borr) {
+    const quien = await pedirPin({ titulo: tipo === 'salida' ? '¿Quién saca el tabaco?' : '¿Quién registra la entrada?' });
+    if (!quien) return;
+    borr = e[clave] = { personaId: quien.id, personaNombre: quien.nombre, lineas: [], nota: '', motivo: tipo === 'entrada' ? 'Llegada CISA' : '', iniciada: new Date().toISOString() };
+    guardar(e);
+  }
+  const stock = () => _estado.stock || {};
+  const enBorrador = ref => borr.lineas.filter(l => l.ref === ref).reduce((a, l) => a + l.qty, 0);
+  // `onDone` (opcional) reanuda la cámara: se llama cuando la lectura queda resuelta.
+  const añadir = (p, onDone) => {
+    const done = () => { if (onDone) onDone(); };
+    const disponible = (stock()[p.ref] || 0) - enBorrador(p.ref);
+    if (tipo === 'salida' && disponible <= 0) {
+      beepError();
+      toast(`No consta stock de ${p.name} en el almacén (hay ${stock()[p.ref] || 0}). Si está mal, haz un inventario.`, 'red', 3500);
+      return done();
+    }
+    openQtySheet(p, tipo === 'salida' ? [1, 2, 5, 10] : [1, 5, 10, 20], tipo === 'salida' ? 'Sacar ×{n}' : 'Entrar ×{n}', qty => {
+      if (tipo === 'salida' && qty > disponible) { beepError(); toast(`Solo hay ${disponible} de ${p.name} en el almacén`, 'red', 3500); return done(); }
+      const l = borr.lineas.find(x => x.ref === p.ref);
+      if (l) l.qty += qty; else borr.lineas.push({ ref: p.ref, name: p.name || p.ref, ean: p.ean || '', qty });
+      guardar(_estado); pinta(); done();
+    });
+  };
+  _onEan = añadir;
+  let enviando = false;
+  const pinta = () => {
+    const total = totalLineas(borr.lineas);
+    cont().innerHTML = `
+      <div class="tb-wrap">
+        <div class="tb-head"><h2>${tipo === 'salida' ? '➜ Salida a tienda' : '⬅ Entrada al almacén'}</h2><button class="tb-link" id="tb-cancel">Cancelar</button></div>
+        <div class="tb-card"><div class="tb-k">${esc(borr.personaNombre)}</div><div class="tb-v">${total} <span style="font-size:0.85rem;font-weight:600">uds · ${borr.lineas.length} artículo${borr.lineas.length === 1 ? '' : 's'}</span></div><div class="tb-s">Pistolea o usa la cámara 📷 (arriba a la derecha). Cada lectura pide la cantidad.</div></div>
+        ${tipo === 'entrada' ? `<div class="chip-row" id="tb-motivo">${['Llegada CISA', 'Vuelve de tienda', 'Otro'].map(m => `<button class="chip ${borr.motivo === m ? 'on' : 'off'}" data-m="${esc(m)}">${esc(m)}</button>`).join('')}</div>` : ''}
+        <button class="tb-btn" id="tb-buscar">🔍 Buscar artículo<small>si no lee el código</small></button>
+        <div class="tb-lines">${borr.lineas.length ? borr.lineas.map((l, i) => `<button class="tb-line" data-i="${i}" style="width:100%;text-align:left"><div class="tb-n">${esc(l.name)}<div class="tb-m">${esc(l.ref)} · en almacén ${stock()[l.ref] || 0}</div></div><div class="tb-q">${l.qty}</div></button>`).join('') : '<div class="tb-empty">Todavía no hay líneas</div>'}</div>
+        <input class="tb-input" id="tb-nota" placeholder="Nota (precinto, caja, observación…)" value="${esc(borr.nota)}">
+        <button class="add-btn" id="tb-confirmar" ${borr.lineas.length ? '' : 'disabled style="opacity:0.4"'}>${tipo === 'salida' ? `Confirmar salida (${total} uds)` : `Confirmar entrada (${total} uds)`}</button>
+      </div>`;
+    document.getElementById('tb-cancel').onclick = () => { if (!borr.lineas.length || confirm('¿Cancelar y borrar estas líneas? No queda registrado.')) { _estado[clave] = null; guardar(_estado); refrescar(); } };
+    document.getElementById('tb-buscar').onclick = () => buscarArticulo(añadir, { soloConStock: tipo === 'salida' });
+    document.getElementById('tb-nota').oninput = ev => { borr.nota = ev.target.value; guardar(_estado); };
+    const mot = document.getElementById('tb-motivo'); if (mot) mot.onclick = ev => { const b = ev.target.closest('[data-m]'); if (!b) return; borr.motivo = b.dataset.m; guardar(_estado); pinta(); };
+    document.querySelectorAll('.tb-lines [data-i]').forEach(b => b.onclick = () => editarLinea(borr, +b.dataset.i, tipo, pinta));
+    document.getElementById('tb-confirmar').onclick = () => confirmar();
+  };
+  const confirmar = async () => {
+    if (!borr.lineas.length || enviando) return;
+    enviando = true;
+    const persona = { id: borr.personaId, nombre: borr.personaNombre };
+    const extra = tipo === 'salida' ? { vale: siguienteVale(_estado.movs), destino: 'tienda' } : { motivo: borr.motivo || 'Otro' };
+    const mov = await registrar(_estado, { tipo, persona, lineas: borr.lineas, nota: borr.nota, extra });
+    _estado[clave] = null; guardar(_estado); _onEan = null;
+    mostrarVale(mov);
+  };
+  pinta();
+}
+
+// Tocar una línea: cambiar la cantidad o quitarla.
+function editarLinea(borr, i, tipo, repinta) {
+  const l = borr.lineas[i], disponible = ((_estado.stock || {})[l.ref] || 0);
+  openQtySheet({ ...l, family: 'TABACO' }, [1, 2, 5, 10], 'Dejar en ×{n}', qty => {
+    if (tipo === 'salida' && qty > disponible) { beepError(); return toast(`Solo hay ${disponible} en el almacén`, 'red'); }
+    l.qty = qty; guardar(_estado); repinta();
+  });
+  const add = document.getElementById('np-add');   // botón «Quitar» al pie de la hoja de cantidad
+  if (add) {
+    const del = document.createElement('button'); del.className = 'tb-danger'; del.style.marginTop = '8px'; del.textContent = '🗑 Quitar esta línea';
+    del.onclick = () => { borr.lineas.splice(i, 1); guardar(_estado); closeSheet(); repinta(); };
+    add.insertAdjacentElement('afterend', del);
+  }
+}
+
+// ---------- vale (resguardo) de lo registrado ----------
+function textoVale(m) {
+  const cab = m.tipo === 'salida' ? `Vale ${m.extra.vale} · salida a tienda` : m.tipo === 'entrada' ? `Entrada al almacén (${m.extra.motivo})` : `Recepción ${m.extra.vale}`;
+  return [`🚬 ${cab}`, `Terminal ${m.terminal} · ${fmtFecha(m.ts)} ${fmtHora(m.ts)} · ${m.persona.nombre}`, ...m.lineas.map(l => `• ${l.qty} × ${l.name} (${l.ref})`), `Total: ${totalLineas(m.lineas)} uds`, m.nota ? `Nota: ${m.nota}` : '', `Registro #${m.seq} · ${m.hash.slice(0, 10)}`].filter(Boolean).join('\n');
+}
+
+function mostrarVale(m) {
+  const t = textoVale(m);
+  openSheet(`<div class="tb-pin-title">${m.tipo === 'salida' ? '✅ Salida registrada' : m.tipo === 'entrada' ? '✅ Entrada registrada' : '✅ Recepción registrada'}</div>
+    <pre style="white-space:pre-wrap;font:inherit;font-size:0.82rem;background:var(--surface2);border-radius:12px;padding:12px;margin:10px 0">${esc(t)}</pre>
+    <button class="add-btn" id="tb-share">📤 Compartir</button>
+    <button class="tb-link" id="tb-ok" style="width:100%;margin-top:6px">Cerrar</button>`, () => refrescar());
+  document.getElementById('tb-share').onclick = () => compartirTexto(t, 'Tabaco almacén');
+  document.getElementById('tb-ok').onclick = () => closeSheet();
+}
+
+// ---------- recepción en tienda ----------
+// El que recibe confirma el vale que salió del almacén. Si la cantidad no cuadra,
+// la diferencia queda como descuadre de tránsito (nadie puede taparla).
+async function abrirRecepcion() {
+  const pend = valesPendientes(_estado.movs, Date.now(), _estado.ajustes.horasAvisoVale);
+  if (!pend.length) return toast('No hay vales en camino');
+  const close = openSheet(`<div class="tb-pin-title">Vales en camino</div><div class="tb-lines" style="margin-top:10px">${pend.map(v => `<button class="tb-line" data-id="${esc(v.id)}" style="width:100%;text-align:left"><div class="tb-n">${esc(v.extra.vale)} · ${esc(v.persona.nombre)}<div class="tb-m">${fmtFecha(v.ts)} ${fmtHora(v.ts)} · ${v.lineas.length} artículo${v.lineas.length === 1 ? '' : 's'}${v.tarde ? ' · ⏳ hace ' + Math.floor(v.horas) + ' h' : ''}</div></div><div class="tb-q">${totalLineas(v.lineas)}</div></button>`).join('')}</div>`);
+  document.querySelector('#sheet-content .tb-lines').onclick = async ev => {
+    const b = ev.target.closest('[data-id]'); if (!b) return;
+    const vale = pend.find(v => v.id === b.dataset.id); close();
+    const quien = await pedirPin({ titulo: '¿Quién recibe en tienda?' }); if (!quien) return;
+    const recibido = Object.fromEntries(vale.lineas.map(l => [l.ref, l.qty]));
+    let nota = '', enviando = false;
+    const pinta = () => {
+      cont().innerHTML = `<div class="tb-wrap">
+        <div class="tb-head"><h2>✔ Recibir ${esc(vale.extra.vale)}</h2><button class="tb-link" id="tb-cancel">Cancelar</button></div>
+        <div class="tb-card"><div class="tb-k">Recibe ${esc(quien.nombre)} · sacó ${esc(vale.persona.nombre)}</div><div class="tb-s">Toca una línea si ha llegado una cantidad distinta. ${quien.id === vale.persona.id ? '⚠ Eres la misma persona que sacó el tabaco: quedará marcado.' : ''}</div></div>
+        <div class="tb-lines">${vale.lineas.map(l => `<div class="tb-line" data-ref="${esc(l.ref)}" style="cursor:pointer"><div class="tb-n">${esc(l.name)}<div class="tb-m">enviado ${l.qty}</div></div><button class="tb-link" data-cero="${esc(l.ref)}" style="white-space:nowrap">No ha llegado</button><div class="tb-q ${recibido[l.ref] < l.qty ? 'neg' : recibido[l.ref] > l.qty ? 'pos' : ''}">${recibido[l.ref]}</div></div>`).join('')}</div>
+        <input class="tb-input" id="tb-nota" placeholder="Nota (precinto roto, caja abierta…)" value="${esc(nota)}">
+        <button class="add-btn" id="tb-confirmar">Confirmar recepción</button></div>`;
+      document.getElementById('tb-cancel').onclick = () => refrescar();
+      document.getElementById('tb-nota').oninput = e2 => { nota = e2.target.value; };
+      cont().querySelector('.tb-lines').onclick = e2 => {
+        const cero = e2.target.closest('[data-cero]');
+        if (cero) { recibido[cero.dataset.cero] = 0; pinta(); return; }
+        const fila = e2.target.closest('[data-ref]'); if (!fila) return;
+        const l = vale.lineas.find(x => x.ref === fila.dataset.ref);
+        openQtySheet({ ...l, family: 'TABACO' }, [l.qty, 1, 2, 5], 'Recibido ×{n}', q => { recibido[l.ref] = q; pinta(); });
+      };
+      document.getElementById('tb-confirmar').onclick = async () => {
+        if (enviando) return;
+        enviando = true;
+        const diferencias = vale.lineas.map(l => ({ ref: l.ref, name: l.name, ean: l.ean, enviado: l.qty, recibido: recibido[l.ref], dif: recibido[l.ref] - l.qty })).filter(d => d.dif !== 0);
+        const mov = await registrar(_estado, { tipo: 'recepcion', persona: { id: quien.id, nombre: quien.nombre }, lineas: vale.lineas.map(l => ({ ...l, qty: recibido[l.ref] })).filter(l => l.qty > 0), nota,
+          extra: { valeId: vale.id, vale: vale.extra.vale, mismaPersona: quien.id === vale.persona.id, diferencias } });
+        if (diferencias.length) toast(`Recepción con ${diferencias.length} diferencia${diferencias.length === 1 ? '' : 's'}: queda como descuadre de tránsito`, 'red', 4000);
+        mostrarVale(mov);
+      };
+    };
+    pinta();
+  };
+}
+
+function abrirSalida() { abrirMovimiento('salida'); }
+function abrirEntrada() { abrirMovimiento('entrada'); }
