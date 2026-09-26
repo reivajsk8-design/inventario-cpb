@@ -113,7 +113,7 @@ export function renderInicio() {
   const e = _estado, stock = e.stock || {}, total = Object.values(stock).reduce((a, b) => a + b, 0);
   const an = anulados(e.movs), salidas = e.movs.filter(m => m.tipo === 'salida' && !an.has(m.id)), ult = salidas[salidas.length - 1];
   const pend = valesPendientes(e.movs, Date.now(), e.ajustes.horasAvisoVale), desc = descuadres(e.movs).filter(d => d.estado === 'pendiente');
-  const borradorS = e.salidaEnCurso && e.salidaEnCurso.lineas.length, borradorI = e.inventarioEnCurso && Object.keys(e.inventarioEnCurso.contado).length;
+  const borradorS = e.salidaEnCurso && e.salidaEnCurso.lineas.length, borradorE = e.entradaEnCurso && e.entradaEnCurso.lineas.length, borradorI = e.inventarioEnCurso && Object.keys(e.inventarioEnCurso.contado).length;
   cont().innerHTML = `
     <div class="tb-wrap">
       <div class="tb-banner ${_integridad.ok ? 'ok' : 'bad'}" id="tb-integ">${_integridad.ok ? `✔ Registro íntegro · ${e.movs.length} movimientos · Terminal ${esc(e.terminal)}` : `⚠ Registro alterado: ${esc(_integridad.problemas.join(' · '))}`}</div>
@@ -126,7 +126,7 @@ export function renderInicio() {
       <div class="tb-actions">
         <button class="tb-btn primary" id="tb-salida">➜ ${borradorS ? `Continuar salida (${e.salidaEnCurso.lineas.length} líneas)` : 'Salida a tienda'}<small>Pistolea los cartones que te llevas. Queda un vale con tu nombre.</small></button>
         <button class="tb-btn" id="tb-recibir">✔ Recibir en tienda<small>${pend.length} vale${pend.length === 1 ? '' : 's'} en camino</small></button>
-        <button class="tb-btn" id="tb-entrada">⬅ Entrada al almacén<small>Llega tabaco o vuelve de tienda</small></button>
+        <button class="tb-btn" id="tb-entrada">⬅ ${borradorE ? `Continuar entrada (${e.entradaEnCurso.lineas.length} líneas)` : 'Entrada al almacén'}<small>Llega tabaco o vuelve de tienda</small></button>
         <button class="tb-btn" id="tb-inventario">📋 ${borradorI ? 'Continuar inventario' : 'Inventario del almacén'}<small>Contar todo y ajustar el stock</small></button>
         <button class="tb-btn" id="tb-stock">📦 Stock<small>Qué hay ahora mismo</small></button>
         <button class="tb-btn" id="tb-descuadres">⚠ Descuadres<small>${desc.length} pendiente${desc.length === 1 ? '' : 's'}</small></button>
@@ -200,18 +200,33 @@ function buscarArticulo(onElegido, { soloConStock = false } = {}) {
 
 // ---------- salida a tienda / entrada al almacén ----------
 // La misma pantalla sirve para las dos: una lista de líneas que se llena pistoleando.
-// Todo se guarda en el borrador (`salidaEnCurso` / `entradaEnCurso`) en cuanto cambia,
-// así que si el móvil se apaga o se cambia de pestaña, la salida se retoma donde iba.
+// Cada línea se guarda en el borrador (`salidaEnCurso` / `entradaEnCurso`), así que si el
+// móvil se apaga o se cambia de pestaña, la salida se retoma donde iba. Dos reglas:
+//  · retomar un borrador SIEMPRE pide el PIN (si no, cualquiera registraría a nombre de otro);
+//  · un borrador sin líneas no se guarda (teclear el PIN y arrepentirse no deja rastro).
 // tipo: 'salida' | 'entrada'
 async function abrirMovimiento(tipo) {
   const e = _estado, clave = tipo === 'salida' ? 'salidaEnCurso' : 'entradaEnCurso';
+  const nuevo = quien => ({ personaId: quien.id, personaNombre: quien.nombre, lineas: [], nota: '', motivo: tipo === 'entrada' ? 'Llegada CISA' : '', iniciada: new Date().toISOString() });
   let borr = e[clave];
-  if (!borr) {
+  if (borr) {
+    const quien = await pedirPin({ titulo: `Continuar ${tipo === 'salida' ? 'salida' : 'entrada'} de ${borr.personaNombre}`, sub: 'Teclea tu PIN' });
+    if (!quien) return;
+    if (quien.id !== borr.personaId) {   // es otra persona: o descarta lo de su compañero, o no sigue
+      if (!confirm(`Este borrador es de ${borr.personaNombre} (${borr.lineas.length} líneas). ¿Descartarlo y empezar el tuyo?`)) return;
+      e[clave] = null; guardar(e); borr = nuevo(quien);
+    }
+  } else {
     const quien = await pedirPin({ titulo: tipo === 'salida' ? '¿Quién saca el tabaco?' : '¿Quién registra la entrada?' });
     if (!quien) return;
-    borr = e[clave] = { personaId: quien.id, personaNombre: quien.nombre, lineas: [], nota: '', motivo: tipo === 'entrada' ? 'Llegada CISA' : '', iniciada: new Date().toISOString() };
-    guardar(e);
+    borr = nuevo(quien);
   }
+  // El borrador solo entra en el estado guardado cuando tiene líneas (y sale al quedarse sin ellas).
+  const guardaBorrador = () => {
+    if (borr.lineas.length) _estado[clave] = borr;
+    else if (_estado[clave] === borr) _estado[clave] = null;
+    guardar(_estado);
+  };
   const stock = () => _estado.stock || {};
   const enBorrador = ref => borr.lineas.filter(l => l.ref === ref).reduce((a, l) => a + l.qty, 0);
   // `onDone` (opcional) reanuda la cámara: se llama cuando la lectura queda resuelta.
@@ -220,6 +235,8 @@ async function abrirMovimiento(tipo) {
     const disponible = (stock()[p.ref] || 0) - enBorrador(p.ref);
     if (tipo === 'salida' && disponible <= 0) {
       beepError();
+      const ov = document.getElementById('sheet-overlay');   // si venía de la hoja «EAN no encontrado», ciérrala
+      if (ov && !ov.classList.contains('hidden')) closeSheet();
       toast(`No consta stock de ${p.name} en el almacén (hay ${stock()[p.ref] || 0}). Si está mal, haz un inventario.`, 'red', 3500);
       return done();
     }
@@ -227,7 +244,7 @@ async function abrirMovimiento(tipo) {
       if (tipo === 'salida' && qty > disponible) { beepError(); toast(`Solo hay ${disponible} de ${p.name} en el almacén`, 'red', 3500); return done(); }
       const l = borr.lineas.find(x => x.ref === p.ref);
       if (l) l.qty += qty; else borr.lineas.push({ ref: p.ref, name: p.name || p.ref, ean: p.ean || '', qty });
-      guardar(_estado); pinta(); done();
+      guardaBorrador(); pinta(); done();
     });
   };
   _onEan = añadir;
@@ -246,42 +263,49 @@ async function abrirMovimiento(tipo) {
       </div>`;
     document.getElementById('tb-cancel').onclick = () => { if (!borr.lineas.length || confirm('¿Cancelar y borrar estas líneas? No queda registrado.')) { _estado[clave] = null; guardar(_estado); refrescar(); } };
     document.getElementById('tb-buscar').onclick = () => buscarArticulo(añadir, { soloConStock: tipo === 'salida' });
-    document.getElementById('tb-nota').oninput = ev => { borr.nota = ev.target.value; guardar(_estado); };
-    const mot = document.getElementById('tb-motivo'); if (mot) mot.onclick = ev => { const b = ev.target.closest('[data-m]'); if (!b) return; borr.motivo = b.dataset.m; guardar(_estado); pinta(); };
-    document.querySelectorAll('.tb-lines [data-i]').forEach(b => b.onclick = () => editarLinea(borr, +b.dataset.i, tipo, pinta));
+    document.getElementById('tb-nota').oninput = ev => { borr.nota = ev.target.value; guardaBorrador(); };
+    const mot = document.getElementById('tb-motivo'); if (mot) mot.onclick = ev => { const b = ev.target.closest('[data-m]'); if (!b) return; borr.motivo = b.dataset.m; guardaBorrador(); pinta(); };
+    document.querySelectorAll('.tb-lines [data-i]').forEach(b => b.onclick = () => editarLinea(borr, +b.dataset.i, tipo, pinta, guardaBorrador));
     document.getElementById('tb-confirmar').onclick = () => confirmar();
   };
   const confirmar = async () => {
     if (!borr.lineas.length || enviando) return;
     enviando = true;
-    const persona = { id: borr.personaId, nombre: borr.personaNombre };
-    const extra = tipo === 'salida' ? { vale: siguienteVale(_estado.movs), destino: 'tienda' } : { motivo: borr.motivo || 'Otro' };
-    const mov = await registrar(_estado, { tipo, persona, lineas: borr.lineas, nota: borr.nota, extra });
-    _estado[clave] = null; guardar(_estado); _onEan = null;
-    mostrarVale(mov);
+    try {
+      const persona = { id: borr.personaId, nombre: borr.personaNombre };
+      const extra = tipo === 'salida' ? { vale: siguienteVale(_estado.movs), destino: 'tienda' } : { motivo: borr.motivo || 'Otro' };
+      const mov = await registrar(_estado, { tipo, persona, lineas: borr.lineas, nota: borr.nota, extra });
+      _estado[clave] = null; guardar(_estado); _onEan = null;
+      mostrarVale(mov);
+    } catch (err) {
+      toast('No se pudo registrar: ' + ((err && err.message) || err), 'red', 4000);
+    } finally { enviando = false; }
   };
   pinta();
 }
 
 // Tocar una línea: cambiar la cantidad o quitarla.
-function editarLinea(borr, i, tipo, repinta) {
+function editarLinea(borr, i, tipo, repinta, guarda) {
   const l = borr.lineas[i], disponible = ((_estado.stock || {})[l.ref] || 0);
-  openQtySheet({ ...l, family: 'TABACO' }, [1, 2, 5, 10], 'Dejar en ×{n}', qty => {
+  openQtySheet({ ...l, family: 'TABACO' }, [...new Set([l.qty, 1, 2, 5, 10])], 'Dejar en ×{n}', qty => {
     if (tipo === 'salida' && qty > disponible) { beepError(); return toast(`Solo hay ${disponible} en el almacén`, 'red'); }
-    l.qty = qty; guardar(_estado); repinta();
+    l.qty = qty; guarda(); repinta();
   });
   const add = document.getElementById('np-add');   // botón «Quitar» al pie de la hoja de cantidad
   if (add) {
     const del = document.createElement('button'); del.className = 'tb-danger'; del.style.marginTop = '8px'; del.textContent = '🗑 Quitar esta línea';
-    del.onclick = () => { borr.lineas.splice(i, 1); guardar(_estado); closeSheet(); repinta(); };
+    del.onclick = () => { borr.lineas.splice(i, 1); guarda(); closeSheet(); repinta(); };
     add.insertAdjacentElement('afterend', del);
   }
 }
 
 // ---------- vale (resguardo) de lo registrado ----------
 function textoVale(m) {
-  const cab = m.tipo === 'salida' ? `Vale ${m.extra.vale} · salida a tienda` : m.tipo === 'entrada' ? `Entrada al almacén (${m.extra.motivo})` : `Recepción ${m.extra.vale}`;
-  return [`🚬 ${cab}`, `Terminal ${m.terminal} · ${fmtFecha(m.ts)} ${fmtHora(m.ts)} · ${m.persona.nombre}`, ...m.lineas.map(l => `• ${l.qty} × ${l.name} (${l.ref})`), `Total: ${totalLineas(m.lineas)} uds`, m.nota ? `Nota: ${m.nota}` : '', `Registro #${m.seq} · ${m.hash.slice(0, 10)}`].filter(Boolean).join('\n');
+  const x = m.extra || {};
+  const cab = m.tipo === 'salida' ? `Vale ${x.vale} · salida a tienda` : m.tipo === 'entrada' ? `Entrada al almacén (${x.motivo})` : `Recepción ${x.vale}`;
+  const lineas = m.lineas.length ? m.lineas.map(l => `• ${l.qty} × ${l.name} (${l.ref})`) : (m.tipo === 'recepcion' ? ['Nada recibido'] : []);
+  const difs = m.tipo === 'recepcion' ? (x.diferencias || []).map(d => `⚠ ${d.name}: enviado ${d.enviado}, recibido ${d.recibido} (${d.dif})`) : [];
+  return [`🚬 ${cab}`, `Terminal ${m.terminal} · ${fmtFecha(m.ts)} ${fmtHora(m.ts)} · ${m.persona.nombre}`, ...lineas, ...difs, `Total: ${totalLineas(m.lineas)} uds`, m.nota ? `Nota: ${m.nota}` : '', `Registro #${m.seq} · ${m.hash.slice(0, 10)}`].filter(Boolean).join('\n');
 }
 
 function mostrarVale(m) {
@@ -314,23 +338,27 @@ async function abrirRecepcion() {
         <div class="tb-lines">${vale.lineas.map(l => `<div class="tb-line" data-ref="${esc(l.ref)}" style="cursor:pointer"><div class="tb-n">${esc(l.name)}<div class="tb-m">enviado ${l.qty}</div></div><button class="tb-link" data-cero="${esc(l.ref)}" style="white-space:nowrap">No ha llegado</button><div class="tb-q ${recibido[l.ref] < l.qty ? 'neg' : recibido[l.ref] > l.qty ? 'pos' : ''}">${recibido[l.ref]}</div></div>`).join('')}</div>
         <input class="tb-input" id="tb-nota" placeholder="Nota (precinto roto, caja abierta…)" value="${esc(nota)}">
         <button class="add-btn" id="tb-confirmar">Confirmar recepción</button></div>`;
-      document.getElementById('tb-cancel').onclick = () => refrescar();
+      document.getElementById('tb-cancel').onclick = () => { if (vale.lineas.every(l => recibido[l.ref] === l.qty) || confirm('¿Salir sin registrar la recepción? Se pierden las cantidades cambiadas.')) refrescar(); };
       document.getElementById('tb-nota').oninput = e2 => { nota = e2.target.value; };
       cont().querySelector('.tb-lines').onclick = e2 => {
         const cero = e2.target.closest('[data-cero]');
         if (cero) { recibido[cero.dataset.cero] = 0; pinta(); return; }
         const fila = e2.target.closest('[data-ref]'); if (!fila) return;
         const l = vale.lineas.find(x => x.ref === fila.dataset.ref);
-        openQtySheet({ ...l, family: 'TABACO' }, [l.qty, 1, 2, 5], 'Recibido ×{n}', q => { recibido[l.ref] = q; pinta(); });
+        openQtySheet({ ...l, family: 'TABACO' }, [...new Set([l.qty, 1, 2, 5])], 'Recibido ×{n}', q => { recibido[l.ref] = q; pinta(); });
       };
       document.getElementById('tb-confirmar').onclick = async () => {
         if (enviando) return;
         enviando = true;
-        const diferencias = vale.lineas.map(l => ({ ref: l.ref, name: l.name, ean: l.ean, enviado: l.qty, recibido: recibido[l.ref], dif: recibido[l.ref] - l.qty })).filter(d => d.dif !== 0);
-        const mov = await registrar(_estado, { tipo: 'recepcion', persona: { id: quien.id, nombre: quien.nombre }, lineas: vale.lineas.map(l => ({ ...l, qty: recibido[l.ref] })).filter(l => l.qty > 0), nota,
-          extra: { valeId: vale.id, vale: vale.extra.vale, mismaPersona: quien.id === vale.persona.id, diferencias } });
-        if (diferencias.length) toast(`Recepción con ${diferencias.length} diferencia${diferencias.length === 1 ? '' : 's'}: queda como descuadre de tránsito`, 'red', 4000);
-        mostrarVale(mov);
+        try {
+          const diferencias = vale.lineas.map(l => ({ ref: l.ref, name: l.name, ean: l.ean, enviado: l.qty, recibido: recibido[l.ref], dif: recibido[l.ref] - l.qty })).filter(d => d.dif !== 0);
+          const mov = await registrar(_estado, { tipo: 'recepcion', persona: { id: quien.id, nombre: quien.nombre }, lineas: vale.lineas.map(l => ({ ...l, qty: recibido[l.ref] })).filter(l => l.qty > 0), nota,
+            extra: { valeId: vale.id, vale: vale.extra.vale, mismaPersona: quien.id === vale.persona.id, diferencias } });
+          if (diferencias.length) toast(`Recepción con ${diferencias.length} diferencia${diferencias.length === 1 ? '' : 's'}: queda como descuadre de tránsito`, 'red', 4000);
+          mostrarVale(mov);
+        } catch (err) {
+          toast('No se pudo registrar: ' + ((err && err.message) || err), 'red', 4000);
+        } finally { enviando = false; }
       };
     };
     pinta();
