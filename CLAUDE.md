@@ -58,8 +58,14 @@ C:\Inventario CPB\          ← GIT ROOT (producción)
     ├── pedidos-export.js   ← Hojas «⬇ Exportar pedido» (un Excel por proveedor) y «📜 Historial» (repetir/descargar/borrar)
     ├── albaranes.js        ← Tab Albaranes: CRUD + foto + PDF
     ├── resumen.js          ← Tab Resumen: stats + exports Excel + nombre usuario
+    ├── tabaco.js           ← Tab Tabaco: setup, inicio, hoja de PIN, salida/entrada/recepción, buscador
+    ├── tabaco-core.js      ← Lógica PURA del tabaco: cadena de hashes, stock, descuadres, filas Excel (tests/)
+    ├── tabaco-store.js     ← Estado `itab` + eslabón duplicado en IndexedDB (`meta` → `tabaco-cadena`)
+    ├── tabaco-inventario.js ← Inventario del almacén + «Cargar desde Excel» (PIN admin)
+    ├── tabaco-historico.js ← Stock, descuadres/regularización, histórico/anulación, ajustes y exports
     └── tutorial.js         ← Tutorial de primera vez
 └── tests/pedidos-core.test.mjs ← node --test (lógica de pedidos, 7 pruebas)
+└── tests/tabaco-core.test.mjs  ← node --test (núcleo del tabaco, 13 pruebas)
 ```
 
 **Carpeta de utilidades** (NO en git):
@@ -96,8 +102,10 @@ C:\Inventario CPB\Inventario CPB\
 | `is` | `{ ref: qty }` | Stock sistema PROXIUM (cargado desde Excel) |
 | `itr` | string | Terminal para conteos/albaranes |
 | `itp` | string | Terminal para pedidos |
+| `itab` | `{ v:1, terminal, admin:{salt,hash}, personas[], movs[], stock, seq, lastHash, ajustes, …EnCurso }` | Control de tabaco del almacén: personas con PIN (solo salt + hash, nunca en claro), movimientos encadenados por hash (inmutables), stock derivado y borradores de salida/entrada/inventario |
 
 **IndexedDB** (`inventario-cpb`): `products` (keyPath `ref`), `albaranes`, `albaran_photos`, `meta`
+En `meta`, la clave **`tabaco-cadena`** guarda `{seq, lastHash}` del último movimiento del tabaco: es la segunda copia del eslabón, la que delata que alguien ha recortado `itab` desde el navegador.
 
 ---
 
@@ -139,6 +147,24 @@ Exporta `filterProducts()` y `mountFilterBar()`. El botón `#fb-scan` usa icono 
 
 ### `scanner.js`
 Escucha `keydown` globalmente. Detecta secuencias rápidas = EAN de pistola HID. Se pausa cuando hay un sheet abierto.
+
+### `db.js`
+IndexedDB de la app. Además de productos/albaranes/fotos: `getMeta(key)` / `setMeta(key, value)` genéricos sobre el store `meta` (los usa el tabaco para el eslabón `tabaco-cadena`).
+
+### `tabaco-core.js`
+**Lógica pura, sin DOM** (por eso se prueba con `node --test`): `esTabaco()`, `crearMovimiento()`/`hashDe()`/`verificarCadena()` (cadena SHA-256), `calcularStock()`/`aplicarMovimiento()`, `diferenciasInventario()`, `descuadres()`, `valesPendientes()`/`siguienteVale()`, `parseFilasStock()` (Excel de Conteos o de Proxium), `filasExcelHistorico()`/`filasExcelRegularizacion()`, `resumenDia()`, `hashPin()`/`pinValido()`.
+
+### `tabaco-store.js`
+Persistencia del módulo: `cargar()`/`guardar()` sobre `itab`, `crear()`, `registrar()` (crea el movimiento encadenado, recalcula el stock, guarda y **duplica el eslabón en IndexedDB**), `verificarIntegridad()` (cadena + stock + eslabón), personas (`altaPersona`, `cambiarPinPersona`, `bajaPersona`, `buscarPersonaPorPin`, `esAdminPin`), `exportarCopia()`, `borrarModulo()`.
+
+### `tabaco.js`
+La pestaña: `mount/unmount`, setup de primera vez, inicio con la banda de integridad, hoja de PIN (numpad; 5 fallos = 30 s de espera), salida a tienda con vale y tope de stock, entrada, recepción en tienda y buscador de artículos de tabaco. Expone `ctx` (estado, `pedirPin`, `refrescar`, `setOnEan`…) a los otros dos módulos.
+
+### `tabaco-inventario.js`
+Inventario del almacén (cada lectura SUMA, tocar una línea fija el número, completo/parcial, borrador con PIN) y **«Cargar desde Excel»** (PIN admin; solo entra el tabaco y avisa de lo que ignora).
+
+### `tabaco-historico.js`
+Stock, descuadres + regularización (PIN admin, barco y Excel para Proxium), histórico con filtros + detalle + anulación (contramovimiento), resumen del día para WhatsApp, ajustes (personas, terminal, avisos, PIN admin, copia JSON, borrar el módulo) y los helpers compartidos `ensureXLSX`/`descargaExcel`/`compartirTexto`.
 
 ### Cada tab
 Exporta `mount()` y `unmount()`. `mount()` renderiza en `#main` y configura botones del nav. `unmount()` limpia.
@@ -248,3 +274,11 @@ git push origin main
 ### 2026-09-02 — Stock de conteos: acepta también el export de RÉGIMEN GENERAL
 - `js/stock.js`: la cabecera puede ser "Artículo + Cantidad" (depósito fiscal) o "Código + Stock/Disponible" (régimen general, "Detalle del stock" de Proxium).
 - `js/conteos.js`: cargar un archivo SUMA al stock ya cargado (permite DF + general en dos archivos); "Eliminar stock cargado" vacía todo. Toast muestra nuevos y total.
+
+### 2026-09-26 — Control de tabaco del almacén (pestaña Tabaco)
+- **Por qué:** en la Terminal E desaparecen unos 6 cartones a la semana y no queda constancia de quién saca qué. Pedido por Jose.
+- Pestaña nueva **🚬 Tabaco** (la 6ª de la barra): salida a tienda con **vale numerado** y PIN de quien la hace, recepción en tienda con PIN (las diferencias quedan como descuadre de tránsito), entradas al almacén, inventario (pistola/cámara o **Excel** de conteos), stock, descuadres + regularización por barco con Excel para Proxium, histórico con anulación (contramovimiento: nunca se borra nada) y ajustes (personas, terminal, copia JSON).
+- **Registro inalterable:** cada movimiento lleva `prevHash + hash` (SHA-256) y el último eslabón se duplica en IndexedDB (`meta` → `tabaco-cadena`). Al abrir la pestaña se comprueban cadena, stock y eslabón: si alguien ha tocado o recortado los datos sale la banda roja «⚠ Registro alterado: …» y el Excel del histórico lo marca. Los PIN se guardan solo como `salt + hash`.
+- Ficheros: `js/tabaco-core.js` (puro), `js/tabaco-store.js`, `js/tabaco.js`, `js/tabaco-inventario.js`, `js/tabaco-historico.js`; `getMeta/setMeta` en `js/db.js`; estilos `.tb-*` en `css/components.css`; pestaña en `index.html` / `js/app.js` / `sw.js`.
+- Datos en `localStorage.itab` (solo en ese móvil). Siguiente paso previsto: volcado a la nube (spec §9).
+- Pruebas: `node --test tests/tabaco-core.test.mjs` (13) y la prueba de pantalla por CDP `humo_tabaco.mjs` del scratchpad (189 comprobaciones, con el Excel real de Jose y la manipulación del registro).
