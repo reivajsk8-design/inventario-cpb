@@ -65,7 +65,7 @@ C:\Inventario CPB\          ← GIT ROOT (producción)
     ├── tabaco-historico.js ← Stock, descuadres/regularización, histórico/anulación, ajustes y exports
     └── tutorial.js         ← Tutorial de primera vez
 └── tests/pedidos-core.test.mjs ← node --test (lógica de pedidos, 7 pruebas)
-└── tests/tabaco-core.test.mjs  ← node --test (núcleo del tabaco, 13 pruebas)
+└── tests/tabaco-core.test.mjs  ← node --test (núcleo del tabaco, 15 pruebas)
 ```
 
 **Carpeta de utilidades** (NO en git):
@@ -149,22 +149,28 @@ Exporta `filterProducts()` y `mountFilterBar()`. El botón `#fb-scan` usa icono 
 Escucha `keydown` globalmente. Detecta secuencias rápidas = EAN de pistola HID. Se pausa cuando hay un sheet abierto.
 
 ### `db.js`
-IndexedDB de la app. Además de productos/albaranes/fotos: `getMeta(key)` / `setMeta(key, value)` genéricos sobre el store `meta` (los usa el tabaco para el eslabón `tabaco-cadena`).
+IndexedDB de la app. Además de productos/albaranes/fotos: `getMeta(key)` / `setMeta(key, value)` genéricos sobre el store `meta` (los usa el tabaco para el eslabón `tabaco-cadena` y para el rastro `tabaco-cadena-anterior`).
 
 ### `tabaco-core.js`
-**Lógica pura, sin DOM** (por eso se prueba con `node --test`): `esTabaco()`, `crearMovimiento()`/`hashDe()`/`verificarCadena()` (cadena SHA-256), `calcularStock()`/`aplicarMovimiento()`, `diferenciasInventario()`, `descuadres()`, `valesPendientes()`/`siguienteVale()`, `parseFilasStock()` (Excel de Conteos o de Proxium), `filasExcelHistorico()`/`filasExcelRegularizacion()`, `resumenDia()`, `hashPin()`/`pinValido()`.
+**Lógica pura, sin DOM** (por eso se prueba con `node --test`): `esTabaco()`, `crearMovimiento()`/`hashDe()`/`verificarCadena()` (cadena SHA-256), `calcularStock()`/`aplicarMovimiento()`, `diferenciasInventario()`, `descuadres()`, `valesPendientes()`/`siguienteVale()`, `estadoMov()` (ANULADA · en camino · recibido · recibido · misma persona), `parseFilasStock()` (Excel de Conteos o de Proxium; las filas **sin cantidad** se saltan y se cuentan en `saltadas`: solo el 0 escrito a propósito es un cero), `filasExcelHistorico()` (**14 columnas**, con `Estado`) / `filasExcelRegularizacion()`, `resumenDia()`, `hashPin()` (**PBKDF2-SHA-256, 60.000 vueltas**) / `pinValido()`.
 
 ### `tabaco-store.js`
-Persistencia del módulo: `cargar()`/`guardar()` sobre `itab`, `crear()`, `registrar()` (crea el movimiento encadenado, recalcula el stock, guarda y **duplica el eslabón en IndexedDB**), `verificarIntegridad()` (cadena + stock + eslabón), personas (`altaPersona`, `cambiarPinPersona`, `bajaPersona`, `buscarPersonaPorPin`, `esAdminPin`), `exportarCopia()`, `borrarModulo()`.
+Persistencia del módulo: `cargar()`/`guardar()` sobre `itab`, `crear()`, `registrar()` (crea el movimiento encadenado, recalcula el stock, guarda y **duplica el eslabón en IndexedDB**), `verificarIntegridad()`, personas (`altaPersona` —nombre único entre activas, «Administrador» reservado—, `cambiarPinPersona`, `bajaPersona`, `buscarPersonaPorPin`, `esAdminPin`), `exportarCopia()`, `borrarModulo()`, `registroAnterior()`.
+- **Dos ventanas a la vez** (la app instalada + una pestaña del navegador): `guardar()` mira lo que hay en el disco antes de escribir y, si va por delante (más `seq`, o el mismo `seq` con otro `lastHash`), **no pisa nada**: lanza «El control de tabaco se ha usado en otra ventana. Recarga la app para seguir.». `registrar()` guarda una copia con el movimiento dentro y solo toca el estado de la pantalla si el guardado salió bien.
+- `verificarIntegridad()` devuelve `{ ok, problemas, avisos, n }`: `problemas` = el registro no cuadra (banda **roja**); `avisos` = no se pudo **leer o guardar** la segunda copia del eslabón, o sea que la detección de borrados está apagada en ese móvil (aviso **ámbar**; el registro sigue dándose por bueno).
+- Borrar el módulo o rehacer el setup apunta antes en IndexedDB (`tabaco-cadena-anterior`) cuántos movimientos había y cuándo fue el último; ese rastro sale en el inicio, en el setup y en Ajustes.
 
 ### `tabaco.js`
-La pestaña: `mount/unmount`, setup de primera vez, inicio con la banda de integridad, hoja de PIN (numpad; 5 fallos = 30 s de espera), salida a tienda con vale y tope de stock, entrada, recepción en tienda y buscador de artículos de tabaco. Expone `ctx` (estado, `pedirPin`, `refrescar`, `setOnEan`…) a los otros dos módulos.
+La pestaña: `mount/unmount`, setup de primera vez, inicio con la banda de integridad, hoja de PIN (numpad; 5 fallos = 30 s de espera, **guardada en `ajustes.pinBloqueoHasta`** para que aguante la recarga), salida a tienda con vale y tope de stock (revalidado **al confirmar**), entrada, recepción en tienda y buscador de artículos de tabaco. Expone `ctx` (estado, `pedirPin`, `refrescar`, `setOnEan`, `guardar`…) a los otros dos módulos.
+- Escucha el evento **`storage`**: si otra ventana cambia `itab`, recarga el estado, avisa y repinta. Todo guardado de la interfaz pasa por `guardaAviso`/`ctx.guardar`, que avisa con un toast en vez de dejar la pantalla a medias.
+- `mount()` es asíncrono: lleva número de montaje (`_gen`) y se abandona tras cada `await` si ya se cambió de pestaña (si no, pintaba encima de Lista y volvía a coger la pistola).
+- El `stock` guardado es solo una **caché**: si no cuadra con los movimientos, la pantalla usa el recalculado (así no se «crea» stock editando `itab` a mano).
 
 ### `tabaco-inventario.js`
-Inventario del almacén (cada lectura SUMA, tocar una línea fija el número, completo/parcial, borrador con PIN) y **«Cargar desde Excel»** (PIN admin; solo entra el tabaco y avisa de lo que ignora).
+Inventario del almacén (cada lectura SUMA, tocar una línea fija el número, completo/parcial, borrador con PIN) y **«Cargar desde Excel»** (PIN admin; solo entra el tabaco, avisa de lo que ignora y de las filas sin cantidad).
 
 ### `tabaco-historico.js`
-Stock, descuadres + regularización (PIN admin, barco y Excel para Proxium), histórico con filtros + detalle + anulación (contramovimiento), resumen del día para WhatsApp, ajustes (personas, terminal, avisos, PIN admin, copia JSON, borrar el módulo) y los helpers compartidos `ensureXLSX`/`descargaExcel`/`compartirTexto`.
+Stock, descuadres + regularización (PIN admin, barco y Excel para Proxium), histórico con filtros + detalle + anulación (contramovimiento; **no** se anula lo que dejaría el almacén en negativo: «ese tabaco ya ha salido del almacén»), resumen del día para WhatsApp, ajustes (personas, terminal, avisos, PIN admin, copia JSON, borrar el módulo) y los helpers compartidos `ensureXLSX`/`descargaExcel`/`compartirTexto`. El histórico pinta **300 movimientos** como máximo, con botón «Mostrar más».
 
 ### Cada tab
 Exporta `mount()` y `unmount()`. `mount()` renderiza en `#main` y configura botones del nav. `unmount()` limpia.
@@ -281,4 +287,6 @@ git push origin main
 - **Registro inalterable:** cada movimiento lleva `prevHash + hash` (SHA-256) y el último eslabón se duplica en IndexedDB (`meta` → `tabaco-cadena`). Al abrir la pestaña se comprueban cadena, stock y eslabón: si alguien ha tocado o recortado los datos sale la banda roja «⚠ Registro alterado: …» y el Excel del histórico lo marca. Los PIN se guardan solo como `salt + hash`.
 - Ficheros: `js/tabaco-core.js` (puro), `js/tabaco-store.js`, `js/tabaco.js`, `js/tabaco-inventario.js`, `js/tabaco-historico.js`; `getMeta/setMeta` en `js/db.js`; estilos `.tb-*` en `css/components.css`; pestaña en `index.html` / `js/app.js` / `sw.js`.
 - Datos en `localStorage.itab` (solo en ese móvil). Siguiente paso previsto: volcado a la nube (spec §9).
-- Pruebas: `node --test tests/tabaco-core.test.mjs` (13) y la prueba de pantalla por CDP `humo_tabaco.mjs` del scratchpad (189 comprobaciones, con el Excel real de Jose y la manipulación del registro).
+- **Tanda de arreglos tras la revisión final (2026-09-26):** los PIN pasan a **PBKDF2-SHA-256 (60.000 vueltas)**; **dos ventanas abiertas ya no se pisan el registro** (`guardar()` no escribe si el disco va por delante y la pestaña escucha el evento `storage`); el Excel del histórico lleva la columna **«Estado»** (14 columnas, `estadoMov()` en el núcleo); una **celda de cantidad vacía** en el Excel ya no cuenta como 0; la salida **revalida el tope de stock al confirmar** y la pantalla usa el **stock recalculado**, no la caché; no se anula una entrada cuyo tabaco **ya salió**; si IndexedDB no deja leer/guardar la segunda copia del eslabón sale un **aviso ámbar** (`avisos`) en vez de callarse; **borrar o recrear el módulo deja rastro** (`tabaco-cadena-anterior`); el histórico pinta **300** movimientos con «Mostrar más»; no hay **dos personas activas con el mismo nombre** ni «Administrador»; el **bloqueo por 5 fallos** aguanta la recarga; y el montaje asíncrono de la pestaña ya no pinta encima de otra.
+- **Al usarlo:** una sola ventana a la vez (si se usan dos, la app avisa y hay que recargar); y el PIN de administrador **no sirve para picar salidas** — Jose tiene que estar también de alta como persona.
+- Pruebas: `node --test tests/tabaco-core.test.mjs` (15) y la prueba de pantalla por CDP `humo_tabaco.mjs` del scratchpad (216 comprobaciones, con el Excel real de Jose, las dos ventanas y la manipulación del registro).
