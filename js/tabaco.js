@@ -12,6 +12,10 @@ import { abrirStock, abrirDescuadres, abrirHistorico, abrirAjustes, compartirTex
 const TERMINALS = ['D', 'MSC', 'E'];
 let _estado = null, _all = [], _integridad = { ok: true, problemas: [], avisos: [], n: 0 }, _onEan = null, _onCam = null, _pinFallos = 0, _pinBloqueoHasta = 0;
 let _anterior = null;   // rastro de un registro que hubo antes en este móvil (si lo hay)
+// `mount()` tarda (lee la BD de artículos y comprueba la cadena). Si mientras carga se cambia de
+// pestaña, lo que venga después NO debe pintar ni volver a coger la pistola: cada montaje lleva
+// su número y se abandona si ya no es el actual.
+let _gen = 0;
 
 // Frase del rastro del registro anterior, para el inicio y para Ajustes.
 export function textoRegistroAnterior(ant) {
@@ -65,13 +69,16 @@ function onStorage(ev) {
 }
 
 export async function mount() {
+  const gen = ++_gen;
   const editOvr = JSON.parse(localStorage.getItem('ie') || '{}');
   const raw = await getAllProducts();
+  if (gen !== _gen) return;   // ya no estamos en Tabaco
   const newArts = Object.values(JSON.parse(localStorage.getItem('ia') || '{}'));
   _all = [...raw, ...newArts].map(p => editOvr[p.ref] ? { ...p, ...editOvr[p.ref] } : p);
   _estado = cargar();
-  if (_estado) { _integridad = await verificarIntegridad(_estado); cuadraStock(); }
+  if (_estado) { _integridad = await verificarIntegridad(_estado); if (gen !== _gen) return; cuadraStock(); }
   _anterior = await registroAnterior();
+  if (gen !== _gen) return;
 
   const navBtn = document.getElementById('btn-nav-right');
   if (cameraSupported()) {
@@ -87,6 +94,7 @@ export async function mount() {
 }
 
 export function unmount() {
+  _gen++;   // lo que quede montándose se abandona
   closeCamera(); _onEan = null;
   window.removeEventListener('storage', onStorage);
   startScanner(null);   // suelta la pistola: si no, seguiría leyendo en Lista, Resumen…
@@ -119,9 +127,13 @@ function catalogo() {
 }
 
 async function refrescar() {
+  const gen = _gen;
   _anterior = await registroAnterior();
+  if (gen !== _gen) return;   // se ha cambiado de pestaña mientras se comprobaba
   if (!_estado) { renderInicio(); return; }   // sin control creado todavía: el inicio enseña el setup
-  _integridad = await verificarIntegridad(_estado); cuadraStock(); renderInicio();
+  _integridad = await verificarIntegridad(_estado);
+  if (gen !== _gen) return;
+  cuadraStock(); renderInicio();
 }
 
 // ---------- setup ----------
