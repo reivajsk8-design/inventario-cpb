@@ -94,6 +94,14 @@ export async function esAdminPin(estado, pin) { return await hashPin(pin, estado
 
 const RESERVADOS = ['administrador'];   // el nombre con el que firma el admin: no puede haber dos
 
+// Igual que `registrar`: se guarda primero la lista nueva de personas y solo si el guardado sale
+// bien se cambia la que tiene la pantalla delante. Si otra ventana se ha adelantado, esto lanza y
+// en memoria no queda un alta (o una baja) que no está en el disco.
+function guardaPersonas(estado, personas) {
+  guardar({ ...estado, personas });
+  estado.personas = personas;
+}
+
 export async function altaPersona(estado, nombre, pin) {
   nombre = String(nombre || '').trim();
   if (!nombre) throw new Error('Falta el nombre');
@@ -106,7 +114,7 @@ export async function altaPersona(estado, nombre, pin) {
   if (await esAdminPin(estado, pin)) throw new Error('Ese PIN es el de administrador: elige otro');
   const salt = nuevoSalt();
   const p = { id: nuevoId('p'), nombre, salt, hash: await hashPin(pin, salt), activa: true, creada: new Date().toISOString() };
-  estado.personas.push(p); guardar(estado);
+  guardaPersonas(estado, [...estado.personas, p]);
   return p;
 }
 export async function cambiarPinPersona(estado, personaId, pin) {
@@ -115,13 +123,21 @@ export async function cambiarPinPersona(estado, personaId, pin) {
   const otra = await buscarPersonaPorPin(estado, pin);
   if (otra && otra.id !== personaId) throw new Error('Ese PIN ya lo usa otra persona: elige otro');
   if (await esAdminPin(estado, pin)) throw new Error('Ese PIN es el de administrador: elige otro');
-  p.salt = nuevoSalt(); p.hash = await hashPin(pin, p.salt); guardar(estado);
+  const salt = nuevoSalt(), hash = await hashPin(pin, salt);
+  guardaPersonas(estado, estado.personas.map(x => x.id === personaId ? { ...x, salt, hash } : x));
 }
-export function bajaPersona(estado, personaId) { const p = estado.personas.find(x => x.id === personaId); if (p) { p.activa = false; p.baja = new Date().toISOString(); guardar(estado); } }
+export function bajaPersona(estado, personaId) {
+  if (!estado.personas.some(x => x.id === personaId)) return;
+  const baja = new Date().toISOString();
+  guardaPersonas(estado, estado.personas.map(x => x.id === personaId ? { ...x, activa: false, baja } : x));
+}
 export async function cambiarPinAdmin(estado, pin) {
   if (!pinValido(pin)) throw new Error('El PIN debe tener de 4 a 6 dígitos');
   if (await buscarPersonaPorPin(estado, pin)) throw new Error('Ese PIN ya lo usa una persona: elige otro');
-  const salt = nuevoSalt(); estado.admin = { salt, hash: await hashPin(pin, salt) }; guardar(estado);
+  const salt = nuevoSalt();
+  const admin = { salt, hash: await hashPin(pin, salt) };
+  guardar({ ...estado, admin });   // si otra ventana se adelantó, lanza y el PIN de aquí no cambia
+  estado.admin = admin;
 }
 export function exportarCopia(estado) { return JSON.stringify({ exportado: new Date().toISOString(), ...estado }, null, 1); }
 export async function borrarModulo() {

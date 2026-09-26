@@ -204,10 +204,13 @@ export function abrirHistorico(ctx) {
 
   // Deshacer una entrada resta del stock de AHORA: si esos cartones ya salieron a tienda, la
   // anulación dejaría el almacén en negativo (un stock que no ha existido nunca). Se simula antes.
+  // Solo se miran las REF del movimiento que se anula: si otra REF está en negativo por un ajuste
+  // raro de antes, no es cosa de esta anulación y no debe bloquearla con el mensaje equivocado.
   const dejariaNegativo = m => {
-    const movs = est().movs;
-    const s = aplicarMovimiento(est().stock || {}, { tipo: 'anulacion', lineas: [], extra: { anulaId: m.id } }, indexarPorId(movs));
-    return Object.keys(s).filter(ref => s[ref] < 0);
+    const porId = indexarPorId(est().movs);
+    const s = aplicarMovimiento(est().stock || {}, { tipo: 'anulacion', lineas: [], extra: { anulaId: m.id } }, porId);
+    const refs = new Set(((porId[m.id] || m).lineas || []).map(l => l.ref));
+    return [...refs].filter(ref => (s[ref] || 0) < 0);
   };
   const NO_ANULABLE = 'No se puede anular: ese tabaco ya ha salido del almacén. Corrígelo con un inventario parcial.';
 
@@ -413,9 +416,10 @@ export async function abrirAjustes(ctx) {
       const p = ctx.estado.personas.find(x => x.id === b.dataset.baja);
       if (!p) return;
       if (!confirm(`¿Dar de baja a ${p.nombre}? Su PIN deja de valer, pero todo lo que sacó sigue en el registro.`)) return;
-      bajaPersona(ctx.estado, p.id);
-      toast(p.nombre + ' está de baja', 'green');
-      pinta();
+      // `bajaPersona` guarda, así que puede lanzar si otra ventana se ha adelantado: se avisa igual
+      // que en el resto de la pantalla (si no, la baja quedaría solo en memoria y sin repintar).
+      try { bajaPersona(ctx.estado, p.id); toast(p.nombre + ' está de baja', 'green'); pinta(); }
+      catch (err) { toast((err && err.message) || 'No se pudo dar de baja', 'red', 4000); }
     });
     let dandoAlta = false;
     document.getElementById('tb-alta').onclick = async () => {
