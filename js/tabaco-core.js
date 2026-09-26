@@ -174,12 +174,22 @@ export function detalleMov(m) {
   }
 }
 
+// En qué ha quedado un movimiento: anulado, el vale en camino o ya recibido (y si lo recibió
+// quien lo sacó). Lo usan el histórico de la pantalla y la columna «Estado» del Excel.
+export function estadoMov(m, movs) {
+  if (anulados(movs).has(m.id)) return 'ANULADA';
+  if (m.tipo === 'salida') return movs.some(x => x.tipo === 'recepcion' && (x.extra || {}).valeId === m.id) ? 'recibido' : 'en camino';
+  if (m.tipo === 'recepcion') return (m.extra || {}).mismaPersona ? 'recibido · misma persona' : 'recibido';
+  return '';
+}
+
 export function filasExcelHistorico(movs, integridad) {
-  const filas = [['Fecha', 'Hora', 'Seq', 'Tipo', 'Vale', 'Persona', 'REF', 'Nombre', 'EAN', 'Cantidad', 'Nota', 'Detalle', 'Hash']];
+  const filas = [['Fecha', 'Hora', 'Seq', 'Tipo', 'Vale', 'Persona', 'REF', 'Nombre', 'EAN', 'Cantidad', 'Nota', 'Estado', 'Detalle', 'Hash']];
   for (const m of [...movs].reverse()) {
-    const base = [fmtFecha(m.ts), fmtHora(m.ts), m.seq, m.tipo, (m.extra || {}).vale || '', m.persona.nombre], det = detalleMov(m), h = (m.hash || '').slice(0, 12);
-    if (!m.lineas.length) filas.push([...base, '', '', '', '', m.nota, det, h]);
-    for (const l of m.lineas) filas.push([...base, l.ref, l.name, l.ean, l.qty, m.nota, det, h]);
+    const base = [fmtFecha(m.ts), fmtHora(m.ts), m.seq, m.tipo, (m.extra || {}).vale || '', m.persona.nombre];
+    const det = detalleMov(m), est = estadoMov(m, movs), h = (m.hash || '').slice(0, 12);
+    if (!m.lineas.length) filas.push([...base, '', '', '', '', m.nota, est, det, h]);
+    for (const l of m.lineas) filas.push([...base, l.ref, l.name, l.ean, l.qty, m.nota, est, det, h]);
   }
   if (integridad && !integridad.ok) filas.push([], ['⚠ REGISTRO ALTERADO', (integridad.problemas || []).join(' · ')]);
   return filas;

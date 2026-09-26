@@ -1,7 +1,7 @@
 // node --test tests/tabaco-core.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { esTabaco, nuevoEstado, canonical, hashPin, nuevoSalt, crearMovimiento, verificarCadena, calcularStock, diferenciasInventario, descuadres, valesPendientes, siguienteVale, parseFilasStock, filasExcelHistorico, filasExcelRegularizacion, resumenDia, nombreArchivo, infoRefs, pinValido } from '../js/tabaco-core.js';
+import { esTabaco, nuevoEstado, canonical, hashPin, nuevoSalt, crearMovimiento, verificarCadena, calcularStock, diferenciasInventario, descuadres, valesPendientes, siguienteVale, parseFilasStock, filasExcelHistorico, filasExcelRegularizacion, resumenDia, nombreArchivo, infoRefs, pinValido, estadoMov } from '../js/tabaco-core.js';
 
 const ANA = { id: 'p_ana', nombre: 'Ana' }, LUIS = { id: 'p_luis', nombre: 'Luis' };
 const L = (ref, qty, name = ref, ean = '') => ({ ref, qty, name, ean });
@@ -137,11 +137,29 @@ test('infoRefs recuerda el último nombre y EAN visto por ref', async () => {
 test('Excel del histórico: una fila por línea, cabecera fija, marca si el registro está alterado', async () => {
   const e = await estadoCon({ tipo: 'salida', persona: LUIS, lineas: [L('A', 2, 'Art A', '1'), L('B', 1, 'Art B', '2')], extra: { vale: 'V-0001' }, nota: 'precinto 7' });
   const f = filasExcelHistorico(e.movs, { ok: true });
-  assert.deepEqual(f[0], ['Fecha', 'Hora', 'Seq', 'Tipo', 'Vale', 'Persona', 'REF', 'Nombre', 'EAN', 'Cantidad', 'Nota', 'Detalle', 'Hash']);
+  assert.deepEqual(f[0], ['Fecha', 'Hora', 'Seq', 'Tipo', 'Vale', 'Persona', 'REF', 'Nombre', 'EAN', 'Cantidad', 'Nota', 'Estado', 'Detalle', 'Hash']);
   assert.equal(f.length, 3); assert.equal(f[1][6], 'A'); assert.equal(f[1][4], 'V-0001'); assert.equal(f[1][10], 'precinto 7');
+  assert.equal(f[1][11], 'en camino');   // columna Estado: el vale todavía no se ha recibido
   const g = filasExcelHistorico(e.movs, { ok: false, problemas: ['cadena rota'] });
   assert.match(g[g.length - 1][0], /ALTERADO/);
   assert.deepEqual(filasExcelRegularizacion([{ ref: 'A', name: 'Art A', ean: '1', dif: -2, tipo: 'inventario', ts: '2026-09-25T10:00:00.000Z', persona: 'Ana', vale: '', barco: 'ARVIA' }])[1].slice(0, 4), ['A', 'Art A', '1', -2]);
+});
+
+test('estadoMov: en camino, recibido, misma persona y ANULADA', async () => {
+  const e = await estadoCon(
+    { tipo: 'inventario', persona: ANA, lineas: [L('A', 10)], extra: { completo: true, diferencias: [] } },
+    { tipo: 'salida', persona: LUIS, lineas: [L('A', 2)], extra: { vale: 'V-0001' } },
+    { tipo: 'salida', persona: LUIS, lineas: [L('A', 1)], extra: { vale: 'V-0002' } },
+    { tipo: 'entrada', persona: ANA, lineas: [L('A', 3)], extra: { motivo: 'Otro' } });
+  const [inv, sal1, sal2, ent] = e.movs;
+  const rec = await crearMovimiento(e, { tipo: 'recepcion', persona: LUIS, lineas: [L('A', 2)], extra: { valeId: sal1.id, vale: 'V-0001', mismaPersona: true, diferencias: [] } });
+  const anu = await crearMovimiento({ ...e, seq: 5, lastHash: rec.hash }, { tipo: 'anulacion', persona: ANA, lineas: [], extra: { anulaId: ent.id, anulaSeq: ent.seq, motivo: 'error' } });
+  const movs = [...e.movs, rec, anu];
+  assert.equal(estadoMov(sal1, movs), 'recibido');
+  assert.equal(estadoMov(sal2, movs), 'en camino');
+  assert.equal(estadoMov(rec, movs), 'recibido · misma persona');
+  assert.equal(estadoMov(ent, movs), 'ANULADA');
+  assert.equal(estadoMov(inv, movs), '');
 });
 
 test('resumenDia agrupa salidas por persona y nombreArchivo lleva terminal y fecha', async () => {

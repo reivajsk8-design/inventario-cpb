@@ -1,6 +1,6 @@
 // js/tabaco-historico.js — stock, descuadres/regularización, histórico/anulación, ajustes y exports del módulo de tabaco
 import { openSheet, closeSheet, toast, esc } from './ui.js';
-import { descuadres, valesPendientes, anulados, filasExcelHistorico, filasExcelRegularizacion, resumenDia, nombreArchivo, fmtFecha, fmtHora, totalLineas, detalleMov } from './tabaco-core.js';
+import { descuadres, valesPendientes, anulados, filasExcelHistorico, filasExcelRegularizacion, resumenDia, nombreArchivo, fmtFecha, fmtHora, totalLineas, detalleMov, estadoMov } from './tabaco-core.js';
 import { registrar, guardar, verificarIntegridad, altaPersona, cambiarPinPersona, bajaPersona, cambiarPinAdmin, exportarCopia, borrarModulo } from './tabaco-store.js';
 
 const cont = () => document.getElementById('main');
@@ -192,14 +192,9 @@ export function abrirHistorico(ctx) {
   const est = () => ctx.estado;
   const personas = () => [...new Set(est().movs.map(m => m.persona.nombre))].sort();
 
-  const estadoTxt = (m, an, pend) => {
-    if (an.has(m.id)) return 'ANULADA';
-    if (m.tipo === 'salida') return pend.has(m.id) ? 'en camino' : 'recibido';
-    if (m.tipo === 'recepcion' && (m.extra || {}).mismaPersona) return '⚠ misma persona';
-    return '';
-  };
-  const filaMov = (m, an, pend) => {
-    const e2 = estadoTxt(m, an, pend), vale = (m.extra || {}).vale || '';
+  // El estado de cada movimiento lo dice el núcleo (el mismo que sale en la columna «Estado» del Excel).
+  const filaMov = (m, movs) => {
+    const e2 = estadoMov(m, movs), vale = (m.extra || {}).vale || '';
     return `<button class="tb-line" data-mov="${esc(m.id)}" style="width:100%;text-align:left"><div class="tb-n">${TIPO_TXT[m.tipo] || esc(m.tipo)} · ${esc(m.persona.nombre)}<div class="tb-m">${fmtHora(m.ts)} · ${plural(m.lineas.length, 'línea', 'líneas')} / ${totalLineas(m.lineas)} uds${vale ? ' · ' + esc(vale) : ''}${e2 ? ' · ' + e2 : ''}</div></div><div class="tb-q">#${m.seq}</div></button>`;
   };
 
@@ -280,14 +275,14 @@ export function abrirHistorico(ctx) {
       : '';
     cont().querySelectorAll('[data-ht]').forEach(b => { const on = b.dataset.ht === fTipo; b.classList.toggle('on', on); b.classList.toggle('off', !on); });
     cont().querySelectorAll('[data-hp]').forEach(b => { const on = b.dataset.hp === fPersona; b.classList.toggle('on', on); b.classList.toggle('off', !on); });
-    const movs = est().movs, an = anulados(movs), pend = new Set(valesPendientes(movs, Date.now(), est().ajustes.horasAvisoVale).map(v => v.id));
+    const movs = est().movs;
     const ql = q.trim().toLowerCase();
     const l = [...movs].reverse().filter(m => (fTipo === 'todos' || m.tipo === fTipo) && (fPersona === 'todas' || m.persona.nombre === fPersona)
       && (!ql || m.lineas.some(x => (x.ref || '').toLowerCase().includes(ql) || (x.name || '').toLowerCase().includes(ql))
         || String((m.extra || {}).vale || '').toLowerCase().includes(ql) || (m.nota || '').toLowerCase().includes(ql)));
     let html = '', dia = null, buf = [];
     const cierraDia = () => { if (buf.length) html += `<div style="${ROT}">${dia}</div><div class="tb-lines">${buf.join('')}</div>`; buf = []; };
-    for (const m of l) { const f = fmtFecha(m.ts); if (f !== dia) { cierraDia(); dia = f; } buf.push(filaMov(m, an, pend)); }
+    for (const m of l) { const f = fmtFecha(m.ts); if (f !== dia) { cierraDia(); dia = f; } buf.push(filaMov(m, movs)); }
     cierraDia();
     document.getElementById('tb-hist').innerHTML = l.length ? html : '<div class="tb-lines"><div class="tb-empty">Nada que coincida</div></div>';
   };
