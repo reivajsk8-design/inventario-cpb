@@ -1,6 +1,6 @@
 // js/tabaco-historico.js — stock, descuadres/regularización, histórico/anulación, ajustes y exports del módulo de tabaco
 import { openSheet, closeSheet, toast, esc } from './ui.js';
-import { descuadres, valesPendientes, anulados, filasExcelHistorico, filasExcelRegularizacion, resumenDia, nombreArchivo, fmtFecha, fmtHora, totalLineas, detalleMov, estadoMov } from './tabaco-core.js';
+import { descuadres, valesPendientes, anulados, filasExcelHistorico, filasExcelRegularizacion, resumenDia, nombreArchivo, fmtFecha, fmtHora, totalLineas, detalleMov, estadoMov, aplicarMovimiento, indexarPorId } from './tabaco-core.js';
 import { registrar, verificarIntegridad, altaPersona, cambiarPinPersona, bajaPersona, cambiarPinAdmin, exportarCopia, borrarModulo } from './tabaco-store.js';
 
 const cont = () => document.getElementById('main');
@@ -198,7 +198,17 @@ export function abrirHistorico(ctx) {
     return `<button class="tb-line" data-mov="${esc(m.id)}" style="width:100%;text-align:left"><div class="tb-n">${TIPO_TXT[m.tipo] || esc(m.tipo)} · ${esc(m.persona.nombre)}<div class="tb-m">${fmtHora(m.ts)} · ${plural(m.lineas.length, 'línea', 'líneas')} / ${totalLineas(m.lineas)} uds${vale ? ' · ' + esc(vale) : ''}${e2 ? ' · ' + e2 : ''}</div></div><div class="tb-q">#${m.seq}</div></button>`;
   };
 
+  // Deshacer una entrada resta del stock de AHORA: si esos cartones ya salieron a tienda, la
+  // anulación dejaría el almacén en negativo (un stock que no ha existido nunca). Se simula antes.
+  const dejariaNegativo = m => {
+    const movs = est().movs;
+    const s = aplicarMovimiento(est().stock || {}, { tipo: 'anulacion', lineas: [], extra: { anulaId: m.id } }, indexarPorId(movs));
+    return Object.keys(s).filter(ref => s[ref] < 0);
+  };
+  const NO_ANULABLE = 'No se puede anular: ese tabaco ya ha salido del almacén. Corrígelo con un inventario parcial.';
+
   const anular = async m => {
+    if (dejariaNegativo(m).length) return toast(NO_ANULABLE, 'red', 5000);
     const quien = await ctx.pedirPin({ admin: true });
     if (quien !== 'admin') return;
     let enviando = false;
@@ -231,7 +241,8 @@ export function abrirHistorico(ctx) {
     // almacén, deshacerla estropearía lo contado. Entonces no se anula: se corrige contando.
     const sigueVivo = (m.tipo === 'salida' && pend.has(m.id)) || (m.tipo === 'entrada' && !an.has(m.id));
     const invPosterior = sigueVivo && movs.some(x => x.tipo === 'inventario' && x.seq > m.seq);
-    const anulable = sigueVivo && !invPosterior;
+    const yaSalio = sigueVivo && !invPosterior && dejariaNegativo(m).length > 0;
+    const anulable = sigueVivo && !invPosterior && !yaSalio;
     openSheet(`
       <div class="tb-pin-title">${TIPO_TXT[m.tipo] || esc(m.tipo)} · #${m.seq}</div>
       <div class="tb-pin-sub">${fmtFecha(m.ts)} ${fmtHora(m.ts)} · ${esc(m.persona.nombre)} · Terminal ${esc(m.terminal)}${an.has(m.id) ? ' · ANULADA' : ''}</div>
@@ -246,7 +257,8 @@ export function abrirHistorico(ctx) {
         <div class="tb-s">Registro #${m.seq} · ${esc((m.hash || '').slice(0, 10))}</div>
       </div>
       ${anulable ? '<button class="tb-danger" id="tb-anular" style="margin-top:10px">Anular (admin)</button>'
-        : invPosterior ? '<div class="tb-card" style="margin-top:10px"><div class="tb-s">No se puede anular: hay un inventario posterior. Si hace falta, corrígelo con un inventario parcial.</div></div>' : ''}`);
+        : invPosterior ? '<div class="tb-card" style="margin-top:10px"><div class="tb-s">No se puede anular: hay un inventario posterior. Si hace falta, corrígelo con un inventario parcial.</div></div>'
+        : yaSalio ? `<div class="tb-card" style="margin-top:10px"><div class="tb-s">${NO_ANULABLE}</div></div>` : ''}`);
     const b = document.getElementById('tb-anular');
     if (b) b.onclick = () => anular(m);
   };
