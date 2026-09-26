@@ -63,14 +63,16 @@ export async function altaPersona(estado, nombre, pin) {
 }
 export async function cambiarPinPersona(estado, personaId, pin) {
   if (!pinValido(pin)) throw new Error('El PIN debe tener de 4 a 6 dígitos');
+  const p = estado.personas.find(x => x.id === personaId); if (!p) throw new Error('Persona no encontrada');
   const otra = await buscarPersonaPorPin(estado, pin);
   if (otra && otra.id !== personaId) throw new Error('Ese PIN ya lo usa otra persona: elige otro');
-  const p = estado.personas.find(x => x.id === personaId); if (!p) throw new Error('Persona no encontrada');
+  if (await esAdminPin(estado, pin)) throw new Error('Ese PIN es el de administrador: elige otro');
   p.salt = nuevoSalt(); p.hash = await hashPin(pin, p.salt); guardar(estado);
 }
 export function bajaPersona(estado, personaId) { const p = estado.personas.find(x => x.id === personaId); if (p) { p.activa = false; p.baja = new Date().toISOString(); guardar(estado); } }
 export async function cambiarPinAdmin(estado, pin) {
   if (!pinValido(pin)) throw new Error('El PIN debe tener de 4 a 6 dígitos');
+  if (await buscarPersonaPorPin(estado, pin)) throw new Error('Ese PIN ya lo usa una persona: elige otro');
   const salt = nuevoSalt(); estado.admin = { salt, hash: await hashPin(pin, salt) }; guardar(estado);
 }
 export function exportarCopia(estado) { return JSON.stringify({ exportado: new Date().toISOString(), ...estado }, null, 1); }
