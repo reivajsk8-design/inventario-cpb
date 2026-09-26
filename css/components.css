@@ -269,7 +269,9 @@
   padding: 10px 20px;
   border-radius: 20px;
   font-size: 0.82rem; font-weight: 600;
-  white-space: nowrap;
+  white-space: normal;
+  width: max-content;                 /* con left:50% el ancho automático se quedaba en media pantalla */
+  max-width: calc(100vw - 32px);      /* los avisos largos del tabaco envuelven en vez de cortarse */
   z-index: 100;
   transition: opacity 0.3s;
 }
