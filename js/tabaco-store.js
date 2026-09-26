@@ -92,9 +92,15 @@ export async function buscarPersonaPorPin(estado, pin) {
 }
 export async function esAdminPin(estado, pin) { return await hashPin(pin, estado.admin.salt) === estado.admin.hash; }
 
+const RESERVADOS = ['administrador'];   // el nombre con el que firma el admin: no puede haber dos
+
 export async function altaPersona(estado, nombre, pin) {
   nombre = String(nombre || '').trim();
   if (!nombre) throw new Error('Falta el nombre');
+  // Dos «Marta» activas hacen ilegible el histórico y el parte del día (y «Administrador» se
+  // confundiría con lo que firma Jose al anular o regularizar).
+  if (RESERVADOS.includes(nombre.toLowerCase())) throw new Error('Ese nombre está reservado');
+  if (estado.personas.some(p => p.activa && p.nombre.trim().toLowerCase() === nombre.toLowerCase())) throw new Error('Ya hay una persona activa con ese nombre');
   if (!pinValido(pin)) throw new Error('El PIN debe tener de 4 a 6 dígitos');
   if (await buscarPersonaPorPin(estado, pin)) throw new Error('Ese PIN ya lo usa otra persona: elige otro');
   if (await esAdminPin(estado, pin)) throw new Error('Ese PIN es el de administrador: elige otro');
