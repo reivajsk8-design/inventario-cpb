@@ -15,7 +15,15 @@ export async function sha256Hex(str) {
   const buf = await globalThis.crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
   return Array.from(new Uint8Array(buf), b => b.toString(16).padStart(2, '0')).join('');
 }
-export function hashPin(pin, salt) { return sha256Hex(salt + ':' + String(pin)); }
+// Los PIN se guardan derivados con PBKDF2 (60.000 vueltas de SHA-256): así, aunque alguien
+// copie el estado del móvil, probar los 10.000 PIN de 4 dígitos deja de ser instantáneo.
+// Devuelve 32 bytes en hexadecimal (64 caracteres), igual que antes.
+export async function hashPin(pin, salt) {
+  const enc = new TextEncoder();
+  const clave = await globalThis.crypto.subtle.importKey('raw', enc.encode(String(pin)), 'PBKDF2', false, ['deriveBits']);
+  const bits = await globalThis.crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt: enc.encode(String(salt)), iterations: 60000 }, clave, 256);
+  return Array.from(new Uint8Array(bits), b => b.toString(16).padStart(2, '0')).join('');
+}
 export function pinValido(pin) { return /^\d{4,6}$/.test(String(pin)); }
 
 export function nuevoEstado(terminal, admin) {

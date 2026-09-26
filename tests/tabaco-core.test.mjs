@@ -30,6 +30,8 @@ test('pinValido: 4 a 6 dígitos', () => {
 test('hashPin es determinista y cambia con el salt', async () => {
   assert.equal(await hashPin('1234', 'abc'), await hashPin('1234', 'abc'));
   assert.notEqual(await hashPin('1234', 'abc'), await hashPin('1234', 'abd'));
+  assert.notEqual(await hashPin('1234', 'abc'), await hashPin('1235', 'abc'));
+  assert.match(await hashPin('1234', 'abc'), /^[0-9a-f]{64}$/);   // PBKDF2-SHA-256, 32 bytes
   assert.notEqual(nuevoSalt(), nuevoSalt()); assert.match(nuevoSalt(), /^[0-9a-f]{16}$/);
 });
 
