@@ -64,11 +64,14 @@ export function abrirStock(ctx) {
     return ctx.catalogo().filter(p => (s[p.ref] || 0) > 0)
       .filter(p => !ql || (p.name || '').toLowerCase().includes(ql) || (p.ref || '').toLowerCase().includes(ql) || (p.ean || '').includes(ql));
   };
-  const s0 = stock(), refs = Object.keys(s0), uds = Object.values(s0).reduce((a, b) => a + b, 0);
+  // La tarjeta cuenta SOLO los artículos con stock positivo, para que cuadre con las líneas de abajo
+  // (un ajuste raro puede dejar una REF en negativo, y eso no es «hay tabaco en el almacén»).
+  const conStock = () => Object.values(stock()).filter(v => v > 0).length;
+  const s0 = stock(), uds = Object.values(s0).reduce((a, b) => a + b, 0);
   cont().innerHTML = `
     <div class="tb-wrap">
       ${cabecera('📦 Stock del almacén')}
-      <div class="tb-card"><div class="tb-k">Hay ahora mismo</div><div class="tb-v">${uds}</div><div class="tb-s">uds en ${plural(refs.length, 'artículo', 'artículos')} · Terminal ${esc(ctx.estado.terminal)}</div></div>
+      <div class="tb-card"><div class="tb-k">Hay ahora mismo</div><div class="tb-v">${uds}</div><div class="tb-s">uds en ${plural(conStock(), 'artículo', 'artículos')} · Terminal ${esc(ctx.estado.terminal)}</div></div>
       <div class="tb-search"><input class="tb-input" id="tb-q" placeholder="Buscar por nombre, código o EAN…"></div>
       <div class="tb-lines" id="tb-stock-lines"></div>
     </div>`;
@@ -77,7 +80,7 @@ export function abrirStock(ctx) {
     const s = stock(), l = items();
     document.getElementById('tb-stock-lines').innerHTML = l.length
       ? l.map(p => `<button class="tb-line" data-ref="${esc(p.ref)}" style="width:100%;text-align:left"><div class="tb-n">${esc(p.name || p.ref)}<div class="tb-m">${esc(p.ref)}${p.ean ? ' · ' + esc(p.ean) : ''}</div></div><div class="tb-q">${s[p.ref] || 0}</div></button>`).join('')
-      : `<div class="tb-empty">${refs.length ? 'Nada que coincida' : 'El almacén está vacío: haz un inventario para empezar'}</div>`;
+      : `<div class="tb-empty">${!conStock() && !q.trim() ? 'El almacén está vacío: haz un inventario para empezar' : 'Nada que coincida'}</div>`;
   };
   document.getElementById('tb-q').addEventListener('input', ev => { q = ev.target.value; pinta(); });
   document.getElementById('tb-stock-lines').addEventListener('click', ev => {
@@ -187,7 +190,7 @@ export function abrirDescuadres(ctx) {
 export function abrirHistorico(ctx) {
   let fTipo = 'todos', fPersona = 'todas', q = '';
   const est = () => ctx.estado;
-  const personas = [...new Set(est().movs.map(m => m.persona.nombre))].sort();
+  const personas = () => [...new Set(est().movs.map(m => m.persona.nombre))].sort();
 
   const estadoTxt = (m, an, pend) => {
     if (an.has(m.id)) return 'ANULADA';
@@ -218,7 +221,7 @@ export function abrirHistorico(ctx) {
         await registrar(ctx.estado, { tipo: 'anulacion', persona: ADMIN, lineas: [], nota: motivo, extra: { anulaId: m.id, anulaSeq: m.seq, motivo } });
         closeSheet();
         toast(`Movimiento #${m.seq} anulado`, 'green', 3500);
-        abrirHistorico(ctx);
+        pinta();   // se queda en el histórico, con los filtros y la búsqueda como estaban
       } catch (err) {
         toast('No se pudo registrar: ' + ((err && err.message) || err), 'red', 4000);
       } finally { enviando = false; }
@@ -227,18 +230,28 @@ export function abrirHistorico(ctx) {
 
   const detalle = m => {
     const movs = est().movs, an = anulados(movs), pend = new Set(valesPendientes(movs, Date.now(), est().ajustes.horasAvisoVale).map(v => v.id));
-    const anulable = (m.tipo === 'salida' && pend.has(m.id)) || (m.tipo === 'entrada' && !an.has(m.id));
+    // Quién recibió en tienda este vale (y si hubo pegas), para que el detalle cierre el círculo.
+    const rec = m.tipo === 'salida' ? movs.find(x => x.tipo === 'recepcion' && (x.extra || {}).valeId === m.id) : null;
+    // La anulación se aplica como resta/suma sobre el stock de AHORA: si después ya se contó el
+    // almacén, deshacerla estropearía lo contado. Entonces no se anula: se corrige contando.
+    const sigueVivo = (m.tipo === 'salida' && pend.has(m.id)) || (m.tipo === 'entrada' && !an.has(m.id));
+    const invPosterior = sigueVivo && movs.some(x => x.tipo === 'inventario' && x.seq > m.seq);
+    const anulable = sigueVivo && !invPosterior;
     openSheet(`
       <div class="tb-pin-title">${TIPO_TXT[m.tipo] || esc(m.tipo)} · #${m.seq}</div>
       <div class="tb-pin-sub">${fmtFecha(m.ts)} ${fmtHora(m.ts)} · ${esc(m.persona.nombre)} · Terminal ${esc(m.terminal)}${an.has(m.id) ? ' · ANULADA' : ''}</div>
       <div class="tb-lines" style="margin:10px 0;max-height:40vh;overflow:auto">${m.lineas.length ? m.lineas.map(l => `<div class="tb-line"><div class="tb-n">${esc(l.name || l.ref)}<div class="tb-m">${esc(l.ref)}${l.ean ? ' · ' + esc(l.ean) : ''}</div></div><div class="tb-q">${l.qty}</div></div>`).join('') : '<div class="tb-empty">Sin líneas (no mueve artículos)</div>'}</div>
       <div class="tb-card">
         <div class="tb-k">${plural(m.lineas.length, 'línea', 'líneas')} · ${totalLineas(m.lineas)} uds</div>
+        ${m.tipo === 'salida' ? (rec
+          ? `<div class="tb-s">✔ Recibido por ${esc(rec.persona.nombre)} · ${fmtFecha(rec.ts)} ${fmtHora(rec.ts)}${(rec.extra || {}).mismaPersona ? ' · ⚠ misma persona' : ''}${((rec.extra || {}).diferencias || []).length ? ' · con diferencias' : ''}</div>`
+          : (an.has(m.id) ? '' : '<div class="tb-s">⏳ En camino: nadie lo ha recibido todavía en tienda</div>')) : ''}
         ${m.nota ? `<div class="tb-s">Nota: ${esc(m.nota)}</div>` : ''}
         ${detalleMov(m) ? `<div class="tb-s">${esc(detalleMov(m))}</div>` : ''}
         <div class="tb-s">Registro #${m.seq} · ${esc((m.hash || '').slice(0, 10))}</div>
       </div>
-      ${anulable ? '<button class="tb-danger" id="tb-anular" style="margin-top:10px">Anular (admin)</button>' : ''}`);
+      ${anulable ? '<button class="tb-danger" id="tb-anular" style="margin-top:10px">Anular (admin)</button>'
+        : invPosterior ? '<div class="tb-card" style="margin-top:10px"><div class="tb-s">No se puede anular: hay un inventario posterior. Si hace falta, corrígelo con un inventario parcial.</div></div>' : ''}`);
     const b = document.getElementById('tb-anular');
     if (b) b.onclick = () => anular(m);
   };
@@ -251,13 +264,20 @@ export function abrirHistorico(ctx) {
         <button class="tb-btn" id="tb-hist-resumen" style="flex:1">📤 Resumen de hoy<small>para mandarlo</small></button>
       </div>
       <div class="chip-row" id="tb-htipos">${['todos', ...Object.keys(TIPO_TXT)].map(t => `<button class="chip off" data-ht="${t}">${t === 'todos' ? 'Todos' : TIPO_TXT[t]}</button>`).join('')}</div>
-      ${personas.length ? `<div class="chip-row" id="tb-hpers"><button class="chip off" data-hp="todas">Todas</button>${personas.map(n => `<button class="chip off" data-hp="${esc(n)}">${esc(n)}</button>`).join('')}</div>` : ''}
+      <div id="tb-hpers-wrap"></div>
       <div class="tb-search"><input class="tb-input" id="tb-q" placeholder="Buscar por artículo, vale o nota…"></div>
       <div id="tb-hist" style="display:flex;flex-direction:column;gap:6px"></div>
     </div>`;
   bindVolver(ctx);
 
   const pinta = () => {
+    // Los chips de persona se rehacen en cada pintada: si un movimiento nuevo trae a alguien
+    // (p. ej. «Administrador» al anular), su chip aparece sin salir de la pantalla.
+    const ps = personas();
+    if (fPersona !== 'todas' && !ps.includes(fPersona)) fPersona = 'todas';
+    document.getElementById('tb-hpers-wrap').innerHTML = ps.length
+      ? `<div class="chip-row" id="tb-hpers"><button class="chip off" data-hp="todas">Todas</button>${ps.map(n => `<button class="chip off" data-hp="${esc(n)}">${esc(n)}</button>`).join('')}</div>`
+      : '';
     cont().querySelectorAll('[data-ht]').forEach(b => { const on = b.dataset.ht === fTipo; b.classList.toggle('on', on); b.classList.toggle('off', !on); });
     cont().querySelectorAll('[data-hp]').forEach(b => { const on = b.dataset.hp === fPersona; b.classList.toggle('on', on); b.classList.toggle('off', !on); });
     const movs = est().movs, an = anulados(movs), pend = new Set(valesPendientes(movs, Date.now(), est().ajustes.horasAvisoVale).map(v => v.id));
@@ -273,8 +293,7 @@ export function abrirHistorico(ctx) {
   };
 
   document.getElementById('tb-htipos').onclick = ev => { const b = ev.target.closest('[data-ht]'); if (!b) return; fTipo = b.dataset.ht; pinta(); };
-  const pers = document.getElementById('tb-hpers');
-  if (pers) pers.onclick = ev => { const b = ev.target.closest('[data-hp]'); if (!b) return; fPersona = b.dataset.hp; pinta(); };
+  document.getElementById('tb-hpers-wrap').onclick = ev => { const b = ev.target.closest('[data-hp]'); if (!b) return; fPersona = b.dataset.hp; pinta(); };
   document.getElementById('tb-q').addEventListener('input', ev => { q = ev.target.value; pinta(); });
   document.getElementById('tb-hist').addEventListener('click', ev => {
     const b = ev.target.closest('[data-mov]'); if (!b) return;
@@ -296,6 +315,12 @@ export async function abrirAjustes(ctx) {
   const quien = await ctx.pedirPin({ admin: true });
   if (quien !== 'admin') return;
   let copiaHecha = false;   // solo en esta sesión: borrar el módulo exige bajarse la copia primero
+  // La comprobación del registro se hace UNA vez al entrar (nada de lo que hay aquí toca los
+  // movimientos). Si falla (IndexedDB caída, crypto sin contexto seguro…) se dice, no se deja la
+  // pantalla en blanco.
+  let integ;
+  try { integ = await verificarIntegridad(ctx.estado); }
+  catch (err) { integ = { error: (err && err.message) || String(err) }; }
 
   const seccion = (titulo, html) => `<div><div style="${ROT};margin-bottom:6px">${titulo}</div><div style="display:flex;flex-direction:column;gap:8px">${html}</div></div>`;
 
@@ -333,8 +358,8 @@ export async function abrirAjustes(ctx) {
     } catch (e) { toast('No se pudo hacer la copia: ' + ((e && e.message) || e), 'red', 4000); }
   };
 
-  async function pinta() {
-    const e = ctx.estado, integ = await verificarIntegridad(e);
+  function pinta() {
+    const e = ctx.estado;
     const activas = e.personas.filter(p => p.activa), bajas = e.personas.filter(p => !p.activa);
     cont().innerHTML = `
       <div class="tb-wrap">
@@ -355,7 +380,8 @@ export async function abrirAjustes(ctx) {
         ${seccion('Copia de seguridad', `
           <button class="tb-btn" id="tb-copia">⬇ Descargar JSON<small>todo el registro, para guardarlo fuera del móvil</small></button>`)}
         ${seccion('Estado del registro', `
-          <div class="tb-banner ${integ.ok ? 'ok' : 'bad'}">${integ.ok ? `✔ todo correcto · ${plural(integ.n, 'movimiento', 'movimientos')}` : '⚠ ' + esc(integ.problemas.join(' · '))}</div>
+          <div class="tb-banner ${integ.ok ? 'ok' : 'bad'}">${integ.error ? '⚠ No se pudo comprobar el registro: ' + esc(integ.error)
+            : integ.ok ? `✔ todo correcto · ${plural(integ.n, 'movimiento', 'movimientos')}` : '⚠ ' + esc((integ.problemas || []).join(' · '))}</div>
           <div class="tb-card"><div class="tb-s">creado el ${fmtFecha(e.creado)} · Terminal ${esc(e.terminal)}</div></div>`)}
         ${seccion('Borrar', `
           <div class="tb-card"><div class="tb-s">${copiaHecha ? 'Ya tienes la copia de esta sesión: puedes borrar.' : 'Baja primero la copia de seguridad (arriba) para poder borrar.'}</div></div>
@@ -374,10 +400,14 @@ export async function abrirAjustes(ctx) {
       toast(p.nombre + ' está de baja', 'green');
       pinta();
     });
+    let dandoAlta = false;
     document.getElementById('tb-alta').onclick = async () => {
+      if (dandoAlta) return;
       const nombre = document.getElementById('tb-alta-nombre').value, pin = document.getElementById('tb-alta-pin').value;
+      dandoAlta = true;
       try { const p = await altaPersona(ctx.estado, nombre, pin); toast(p.nombre + ' ya puede sacar tabaco con su PIN', 'green', 3500); pinta(); }
       catch (err) { toast((err && err.message) || 'No se pudo dar de alta', 'red', 4000); }
+      finally { dandoAlta = false; }
     };
     document.getElementById('tb-aj-term').onclick = ev => {
       const b = ev.target.closest('[data-t]'); if (!b) return;
@@ -400,5 +430,5 @@ export async function abrirAjustes(ctx) {
       location.reload();
     };
   }
-  await pinta();
+  pinta();
 }
