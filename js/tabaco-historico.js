@@ -187,8 +187,12 @@ export function abrirDescuadres(ctx) {
 // ---------- histórico y anulación ----------
 // El registro no se edita ni se borra nunca: anular añade un movimiento de anulación (del
 // administrador, con motivo) que deshace el stock y deja la salida/entrada marcada «ANULADA».
+// Cuántos movimientos se pintan de una vez: con cientos de ellos, repintar la lista entera en
+// cada tecla del buscador dejaba el móvil pillado. El resto se ve con «Mostrar más».
+const HIST_PAGINA = 300;
+
 export function abrirHistorico(ctx) {
-  let fTipo = 'todos', fPersona = 'todas', q = '';
+  let fTipo = 'todos', fPersona = 'todas', q = '', limite = HIST_PAGINA;
   const est = () => ctx.estado;
   const personas = () => [...new Set(est().movs.map(m => m.persona.nombre))].sort();
 
@@ -292,11 +296,15 @@ export function abrirHistorico(ctx) {
     const l = [...movs].reverse().filter(m => (fTipo === 'todos' || m.tipo === fTipo) && (fPersona === 'todas' || m.persona.nombre === fPersona)
       && (!ql || m.lineas.some(x => (x.ref || '').toLowerCase().includes(ql) || (x.name || '').toLowerCase().includes(ql))
         || String((m.extra || {}).vale || '').toLowerCase().includes(ql) || (m.nota || '').toLowerCase().includes(ql)));
+    const vis = l.slice(0, limite), restan = l.length - vis.length;
     let html = '', dia = null, buf = [];
     const cierraDia = () => { if (buf.length) html += `<div style="${ROT}">${dia}</div><div class="tb-lines">${buf.join('')}</div>`; buf = []; };
-    for (const m of l) { const f = fmtFecha(m.ts); if (f !== dia) { cierraDia(); dia = f; } buf.push(filaMov(m, movs)); }
+    for (const m of vis) { const f = fmtFecha(m.ts); if (f !== dia) { cierraDia(); dia = f; } buf.push(filaMov(m, movs)); }
     cierraDia();
+    if (restan > 0) html += `<button class="tb-link" id="tb-hist-mas" style="text-align:left">Mostrar más (${restan} ${restan === 1 ? 'movimiento' : 'movimientos'} más)</button>`;
     document.getElementById('tb-hist').innerHTML = l.length ? html : '<div class="tb-lines"><div class="tb-empty">Nada que coincida</div></div>';
+    const mas = document.getElementById('tb-hist-mas');
+    if (mas) mas.onclick = () => { limite += HIST_PAGINA; pinta(); };   // los filtros se quedan como están
   };
 
   document.getElementById('tb-htipos').onclick = ev => { const b = ev.target.closest('[data-ht]'); if (!b) return; fTipo = b.dataset.ht; pinta(); };
