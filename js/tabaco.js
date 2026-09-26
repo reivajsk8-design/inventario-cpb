@@ -10,7 +10,7 @@ import { abrirInventario } from './tabaco-inventario.js';
 import { abrirStock, abrirDescuadres, abrirHistorico, abrirAjustes, compartirTexto } from './tabaco-historico.js';
 
 const TERMINALS = ['D', 'MSC', 'E'];
-let _estado = null, _all = [], _integridad = { ok: true, problemas: [], n: 0 }, _onEan = null, _onCam = null, _pinFallos = 0, _pinBloqueoHasta = 0;
+let _estado = null, _all = [], _integridad = { ok: true, problemas: [], avisos: [], n: 0 }, _onEan = null, _onCam = null, _pinFallos = 0, _pinBloqueoHasta = 0;
 let _anterior = null;   // rastro de un registro que hubo antes en este móvil (si lo hay)
 
 // Frase del rastro del registro anterior, para el inicio y para Ajustes.
@@ -155,6 +155,7 @@ export function renderInicio() {
         <div class="tb-card"><div class="tb-k">Stock almacén</div><div class="tb-v">${total}</div><div class="tb-s">uds en ${nRefs} artículo${nRefs === 1 ? '' : 's'}</div></div>
         <div class="tb-card"><div class="tb-k">Última salida</div><div class="tb-v" style="font-size:1rem">${ult ? esc(ult.persona.nombre) : '—'}</div><div class="tb-s">${ult ? `${fmtFecha(ult.ts)} ${fmtHora(ult.ts)} · ${totalLineas(ult.lineas)} uds · ${esc(ult.extra.vale)}` : 'todavía ninguna'}</div></div>
       </div>
+      ${(_integridad.avisos || []).map(a => `<div class="tb-alert">⚠ ${esc(a)}</div>`).join('')}
       ${textoRegistroAnterior(_anterior) ? `<div class="tb-alert">⚠ ${esc(textoRegistroAnterior(_anterior))}</div>` : ''}
       ${desc.length ? `<div class="tb-alert">⚠ ${desc.length} descuadre${desc.length === 1 ? '' : 's'} pendiente${desc.length === 1 ? '' : 's'} de regularizar</div>` : ''}
       ${pend.filter(v => v.tarde).length ? `<div class="tb-alert">⏳ ${pend.filter(v => v.tarde).map(v => `${esc(v.extra.vale)} (${esc(v.persona.nombre)}, hace ${Math.floor(v.horas)} h)`).join(', ')} sin confirmar en tienda</div>` : ''}

@@ -389,6 +389,7 @@ export async function abrirAjustes(ctx) {
         ${seccion('Estado del registro', `
           <div class="tb-banner ${integ.ok ? 'ok' : 'bad'}">${integ.error ? '⚠ No se pudo comprobar el registro: ' + esc(integ.error)
             : integ.ok ? `✔ todo correcto · ${plural(integ.n, 'movimiento', 'movimientos')}` : '⚠ ' + esc((integ.problemas || []).join(' · '))}</div>
+          ${(integ.avisos || []).map(a => `<div class="tb-alert">⚠ ${esc(a)}</div>`).join('')}
           ${(ctx.anterior && ctx.anterior()) ? `<div class="tb-alert">⚠ ${esc(ctx.anterior())}</div>` : ''}
           <div class="tb-card"><div class="tb-s">creado el ${fmtFecha(e.creado)} · Terminal ${esc(e.terminal)}</div></div>`)}
         ${seccion('Borrar', `

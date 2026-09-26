@@ -5,6 +5,10 @@ import { getMeta, setMeta } from './db.js';
 export const KEY = 'itab';
 const META = 'tabaco-cadena';
 const META_ANT = 'tabaco-cadena-anterior';   // rastro de un registro que hubo antes en este móvil
+// Si IndexedDB falla al guardar el eslabón, la segunda copia deja de valer como aviso de
+// borrados: se apunta aquí para decirlo en la banda de integridad (no es «registro alterado»).
+let _metaFallo = false;
+export function fallaSegundaCopia() { return _metaFallo; }
 
 export function cargar() {
   try { const e = JSON.parse(localStorage.getItem(KEY) || 'null'); return e && e.v === 1 ? e : null; } catch { return null; }
@@ -43,7 +47,7 @@ export async function crear(terminal, pinAdmin) {
   const estado = nuevoEstado(terminal, { salt, hash: await hashPin(pinAdmin, salt) });
   await apuntarRegistroAnterior();
   escribir(estado);
-  try { await setMeta(META, { seq: 0, lastHash: '0', ts: estado.creado }); } catch {}
+  try { await setMeta(META, { seq: 0, lastHash: '0', ts: estado.creado }); } catch { _metaFallo = true; }
   return estado;
 }
 
@@ -58,23 +62,28 @@ export async function registrar(estado, datos) {
   guardar(nuevo);   // puede lanzar: entonces en memoria no cambia nada
   estado.movs.push(mov);
   estado.seq = nuevo.seq; estado.lastHash = nuevo.lastHash; estado.stock = nuevo.stock;
-  try { await setMeta(META, { seq: mov.seq, lastHash: mov.hash, ts: mov.ts }); } catch {}
+  try { await setMeta(META, { seq: mov.seq, lastHash: mov.hash, ts: mov.ts }); } catch { _metaFallo = true; }
   return mov;
 }
 
 const ordenado = o => Object.keys(o).sort().map(k => k + '=' + o[k]).join(';');
 
+// `problemas` = el registro no cuadra (banda roja). `avisos` = la segunda defensa no está
+// funcionando en este móvil (banda en ámbar aparte): no es que falte nada, es que si faltara
+// no nos enteraríamos. Se distinguen para no dar por alterado un registro que está bien.
 export async function verificarIntegridad(estado) {
-  const problemas = [];
+  const problemas = [], avisos = [];
   const cadena = await verificarCadena(estado.movs);
   if (!cadena.ok) problemas.push(`registro roto en el movimiento #${cadena.rotoEn}: ${cadena.motivo}`);
   else if (estado.seq !== estado.movs.length || (estado.movs.length && estado.lastHash !== cadena.ultimo)) problemas.push('el último eslabón guardado no coincide con los movimientos');
   if (ordenado(calcularStock(estado.movs)) !== ordenado(estado.stock || {})) problemas.push('el stock guardado no coincide con los movimientos');
-  let meta = null;
-  try { meta = await getMeta(META); } catch {}
-  if (meta && meta.seq > estado.seq) problemas.push(`faltan movimientos: este móvil llegó a tener ${meta.seq} y ahora hay ${estado.seq}`);
+  let meta = null, metaRoto = false;
+  try { meta = await getMeta(META); } catch { metaRoto = true; }
+  if (metaRoto || (!meta && (estado.seq || 0) > 0)) avisos.push('No se pudo leer la segunda copia del eslabón: la detección de borrados está desactivada en este móvil.');
+  else if (meta && meta.seq > estado.seq) problemas.push(`faltan movimientos: este móvil llegó a tener ${meta.seq} y ahora hay ${estado.seq}`);
   else if (meta && meta.seq === estado.seq && meta.lastHash !== estado.lastHash) problemas.push('el último movimiento no es el que se registró');
-  return { ok: problemas.length === 0, problemas, n: estado.movs.length };
+  if (_metaFallo) avisos.push('No se pudo guardar la segunda copia del eslabón: la detección de borrados está desactivada en este móvil.');
+  return { ok: problemas.length === 0, problemas, avisos, n: estado.movs.length };
 }
 
 export async function buscarPersonaPorPin(estado, pin) {
