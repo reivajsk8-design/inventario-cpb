@@ -1,6 +1,6 @@
 // sw.js — Service Worker para Inventario CPB
 // CACHE_NAME se incrementa automáticamente via git pre-commit hook
-const CACHE_NAME = 'cpb-v72';
+const CACHE_NAME = 'cpb-v73';
 
 const PRECACHE = [
   './',
