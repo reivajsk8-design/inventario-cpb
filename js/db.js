@@ -51,6 +51,17 @@ export async function setStoredDBVersion(v) {
   return idbReq(tx('meta', 'readwrite').put({ key: 'db-version', value: v }));
 }
 
+export async function getMeta(key) {
+  await openDB();
+  const rec = await idbReq(tx('meta').get(key));
+  return rec?.value ?? null;
+}
+
+export async function setMeta(key, value) {
+  await openDB();
+  return idbReq(tx('meta', 'readwrite').put({ key, value }));
+}
+
 export async function loadProductsFromNetwork() {
   const res   = await fetch('db.json.gz');
   const buf   = await res.arrayBuffer();
