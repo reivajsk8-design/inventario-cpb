@@ -8,6 +8,7 @@ import { mount as mountConteos,  unmount as unmountConteos  } from './conteos.js
 import { mount as mountPedidos,  unmount as unmountPedidos  } from './pedidos.js';
 import { mount as mountResumen,   unmount as unmountResumen   } from './resumen.js';
 import { mount as mountAlbaranes, unmount as unmountAlbaranes } from './albaranes.js';
+import { mount as mountTabaco, unmount as unmountTabaco } from './tabaco.js';
 import { toast, closeSheet, setNavTitle } from './ui.js';
 import { closeCamera } from './camera-scanner.js';
 import { showTutorial } from './tutorial.js';
@@ -18,6 +19,7 @@ const TABS = {
   pedidos:  { mount: mountPedidos,  unmount: unmountPedidos,  title: 'Pedidos'        },
   albaranes:{ mount: mountAlbaranes,unmount: unmountAlbaranes,title: 'Albaranes'      },
   resumen:  { mount: mountResumen,  unmount: unmountResumen,  title: 'Resumen'        },
+  tabaco:   { mount: mountTabaco,   unmount: unmountTabaco,   title: 'Tabaco almacén' },
 };
 
 let _currentTab = null;

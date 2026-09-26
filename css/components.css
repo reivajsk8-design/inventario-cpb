@@ -558,3 +558,45 @@
 .ph-confirm   { display: flex; align-items: center; gap: 8px; }
 .ph-confirm span { flex: 1; font-size: 0.75rem; color: var(--text2); }
 .ph-secondary:disabled, .ph-danger:disabled, .add-btn:disabled { opacity: 0.5; }
+
+/* ── Tabaco almacén ── */
+.tb-wrap { padding: 12px 14px 90px; display: flex; flex-direction: column; gap: 12px; }
+.tb-banner { border-radius: 12px; padding: 10px 12px; font-size: 0.8rem; font-weight: 600; }
+.tb-banner.ok  { background: rgba(48,209,88,0.12); color: var(--green, #30d158); }
+.tb-banner.bad { background: rgba(255,69,58,0.14); color: var(--red); }
+.tb-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.tb-card { background: var(--surface); border-radius: 14px; padding: 12px; }
+.tb-card .tb-k { font-size: 0.7rem; color: var(--text3); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+.tb-card .tb-v { font-size: 1.35rem; font-weight: 800; margin-top: 2px; }
+.tb-card .tb-s { font-size: 0.75rem; color: var(--text3); margin-top: 2px; }
+.tb-alert { background: rgba(255,159,10,0.14); color: #ff9f0a; border-radius: 12px; padding: 10px 12px; font-size: 0.8rem; font-weight: 600; }
+.tb-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.tb-btn { background: var(--surface); border-radius: 14px; padding: 16px 12px; text-align: left; font-size: 0.9rem; font-weight: 700; color: var(--text); display: flex; flex-direction: column; gap: 4px; transition: transform 160ms cubic-bezier(0.23,1,0.32,1); }
+.tb-btn:active { transform: scale(0.97); }
+.tb-btn small { font-size: 0.72rem; color: var(--text3); font-weight: 500; }
+.tb-btn.primary { background: var(--accent); color: #fff; grid-column: 1 / -1; }
+.tb-btn.primary small { color: rgba(255,255,255,0.8); }
+.tb-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.tb-head h2 { margin: 0; font-size: 1.05rem; }
+.tb-link { color: var(--accent); font-weight: 700; font-size: 0.85rem; background: none; padding: 6px 8px; }
+.tb-lines { background: var(--surface); border-radius: 14px; overflow: hidden; }
+.tb-line { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-bottom: 1px solid var(--surface2); }
+.tb-line:last-child { border-bottom: 0; }
+.tb-line .tb-n { flex: 1; min-width: 0; font-size: 0.85rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tb-line .tb-m { font-size: 0.72rem; color: var(--text3); font-weight: 500; }
+.tb-line .tb-q { font-size: 1.05rem; font-weight: 800; min-width: 44px; text-align: right; font-variant-numeric: tabular-nums; }
+.tb-line .tb-q.neg { color: var(--red); }
+.tb-line .tb-q.pos { color: var(--green, #30d158); }
+.tb-empty { color: var(--text3); font-size: 0.85rem; text-align: center; padding: 18px; }
+.tb-pin-dots { display: flex; justify-content: center; gap: 12px; margin: 12px 0 8px; height: 16px; }
+.tb-pin-dots i { width: 14px; height: 14px; border-radius: 50%; background: var(--surface2); display: block; }
+.tb-pin-dots i.on { background: var(--accent); }
+.tb-pin-title { text-align: center; font-weight: 800; font-size: 1rem; }
+.tb-pin-sub { text-align: center; color: var(--text3); font-size: 0.8rem; margin-top: 2px; }
+.tb-input { width: 100%; background: var(--surface2); border-radius: 12px; padding: 12px 14px; color: var(--text); font-size: 1rem; font-weight: 600; }
+.tb-row { display: flex; gap: 8px; align-items: center; }
+.tb-toggle { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--surface); border-radius: 12px; padding: 10px 12px; font-size: 0.85rem; font-weight: 600; }
+.tb-toggle input { width: 20px; height: 20px; accent-color: var(--accent); }
+.tb-tabs { display: flex; gap: 6px; }
+.tb-search { position: sticky; top: 0; background: var(--bg); padding: 4px 0 8px; z-index: 2; }
+.tb-danger { color: var(--red); background: rgba(255,69,58,0.12); border-radius: 12px; padding: 12px; width: 100%; font-weight: 700; font-size: 0.82rem; }

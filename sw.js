@@ -1,6 +1,6 @@
 // sw.js — Service Worker para Inventario CPB
 // CACHE_NAME se incrementa automáticamente via git pre-commit hook
-const CACHE_NAME = 'cpb-v75';
+const CACHE_NAME = 'cpb-v76';
 
 const PRECACHE = [
   './',
@@ -29,6 +29,11 @@ const PRECACHE = [
   './js/pedidos.js',
   './js/pedidos-core.js',
   './js/pedidos-export.js',
+  './js/tabaco-core.js',
+  './js/tabaco-store.js',
+  './js/tabaco.js',
+  './js/tabaco-inventario.js',
+  './js/tabaco-historico.js',
   './js/resumen.js',
   './js/albaranes.js',
   'https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js',
