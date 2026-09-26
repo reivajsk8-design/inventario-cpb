@@ -4,7 +4,7 @@ import { openSheet, closeSheet, openQtySheet, toast, esc } from './ui.js';
 import { startScanner } from './scanner.js';
 import { matchesEan, openAssignEanSheet } from './eans.js';
 import { cameraSupported, openCamera, closeCamera, resumeCamera, beepError, beepMatch } from './camera-scanner.js';
-import { esTabaco, infoRefs, valesPendientes, descuadres, anulados, totalLineas, fmtFecha, fmtHora, siguienteVale, pinValido } from './tabaco-core.js';
+import { esTabaco, infoRefs, valesPendientes, descuadres, anulados, totalLineas, fmtFecha, fmtHora, siguienteVale, pinValido, calcularStock } from './tabaco-core.js';
 import { cargar, guardar, crear, registrar, verificarIntegridad, buscarPersonaPorPin, esAdminPin, registroAnterior, KEY } from './tabaco-store.js';
 import { abrirInventario } from './tabaco-inventario.js';
 import { abrirStock, abrirDescuadres, abrirHistorico, abrirAjustes, compartirTexto } from './tabaco-historico.js';
@@ -44,11 +44,22 @@ export const ctx = {
   toast, esc,
 };
 
+// El stock guardado es solo una caché: si no cuadra con los movimientos (alguien lo ha tocado a
+// mano, o se quedó a medias), la pantalla usa el recalculado. No se guarda aquí: lo deja en su
+// sitio el siguiente movimiento, y la banda roja sigue avisando de que el archivo estaba mal.
+function cuadraStock() {
+  if (!_estado) return;
+  const calc = calcularStock(_estado.movs);
+  const clave = o => Object.keys(o).sort().map(k => k + '=' + o[k]).join(';');
+  if (clave(calc) !== clave(_estado.stock || {})) _estado.stock = calc;
+}
+
 // Otra ventana (o la app instalada) ha escrito en `itab`: se recarga el estado y se repinta,
 // así las dos pantallas dicen lo mismo y nadie sigue trabajando sobre un registro viejo.
 function onStorage(ev) {
   if (ev && ev.key && ev.key !== KEY) return;
   _estado = cargar();
+  cuadraStock();
   toast('El control de tabaco ha cambiado en otra ventana; pantalla actualizada.', '', 3500);
   refrescar();
 }
@@ -59,7 +70,7 @@ export async function mount() {
   const newArts = Object.values(JSON.parse(localStorage.getItem('ia') || '{}'));
   _all = [...raw, ...newArts].map(p => editOvr[p.ref] ? { ...p, ...editOvr[p.ref] } : p);
   _estado = cargar();
-  if (_estado) _integridad = await verificarIntegridad(_estado);
+  if (_estado) { _integridad = await verificarIntegridad(_estado); cuadraStock(); }
   _anterior = await registroAnterior();
 
   const navBtn = document.getElementById('btn-nav-right');
@@ -110,7 +121,7 @@ function catalogo() {
 async function refrescar() {
   _anterior = await registroAnterior();
   if (!_estado) { renderInicio(); return; }   // sin control creado todavía: el inicio enseña el setup
-  _integridad = await verificarIntegridad(_estado); renderInicio();
+  _integridad = await verificarIntegridad(_estado); cuadraStock(); renderInicio();
 }
 
 // ---------- setup ----------
