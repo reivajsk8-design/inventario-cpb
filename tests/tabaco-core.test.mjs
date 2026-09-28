@@ -1,7 +1,7 @@
 // node --test tests/tabaco-core.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { esTabaco, nuevoEstado, canonical, hashPin, nuevoSalt, crearMovimiento, verificarCadena, calcularStock, diferenciasInventario, descuadres, valesPendientes, siguienteVale, parseFilasStock, filasExcelHistorico, filasExcelRegularizacion, resumenDia, nombreArchivo, infoRefs, pinValido, estadoMov } from '../js/tabaco-core.js';
+import { esTabaco, nuevoEstado, canonical, hashPin, nuevoSalt, crearMovimiento, verificarCadena, calcularStock, diferenciasInventario, descuadres, valesPendientes, siguienteVale, parseFilasStock, filasExcelHistorico, filasExcelRegularizacion, resumenDia, nombreArchivo, infoRefs, pinValido, estadoMov, recepcionActiva } from '../js/tabaco-core.js';
 
 const ANA = { id: 'p_ana', nombre: 'Ana' }, LUIS = { id: 'p_luis', nombre: 'Luis' };
 const L = (ref, qty, name = ref, ean = '') => ({ ref, qty, name, ean });
@@ -170,4 +170,23 @@ test('resumenDia agrupa salidas por persona y nombreArchivo lleva terminal y fec
   const t = resumenDia(e.movs, hoy, 'E');
   assert.match(t, /Luis: 2 salidas · 5 uds \(V-0001, V-0002\)/); assert.match(t, /Stock almacén: 5/); assert.match(t, /Vales sin recibir: 2/);
   assert.match(nombreArchivo('historico', 'E', new Date(2026, 8, 25)), /^historico_tabaco_E_25-09-2026\.xlsx$/);
+});
+
+test('recepción desactivada: la salida marcada sinRecepcion no queda «en camino», su estado es «entregada» y el estado nuevo arranca con la recepción apagada', async () => {
+  const e = await estadoCon(
+    { tipo: 'inventario', persona: ANA, lineas: [L('A', 10)], extra: { completo: true, diferencias: [] } },
+    { tipo: 'salida', persona: LUIS, lineas: [L('A', 2)], extra: { vale: 'V-0001', destino: 'tienda', sinRecepcion: true } },
+    { tipo: 'salida', persona: LUIS, lineas: [L('A', 1)], extra: { vale: 'V-0002', destino: 'tienda' } });
+  const [, entregada, enCamino] = e.movs;
+  assert.deepEqual(valesPendientes(e.movs).map(v => v.extra.vale), ['V-0002']);
+  assert.equal(estadoMov(entregada, e.movs), 'entregada');
+  assert.equal(estadoMov(enCamino, e.movs), 'en camino');
+  assert.equal(siguienteVale(e.movs), 'V-0003');
+  const anu = await crearMovimiento(e, { tipo: 'anulacion', persona: ANA, lineas: [], extra: { anulaId: entregada.id, anulaSeq: entregada.seq, motivo: 'error' } });
+  assert.equal(estadoMov(entregada, [...e.movs, anu]), 'ANULADA');
+  assert.deepEqual(calcularStock([...e.movs, anu]), { A: 9 });
+  assert.equal(nuevoEstado('E', { salt: 'x', hash: 'y' }).ajustes.recepcion, false);
+  assert.equal(recepcionActiva({ ajustes: {} }), false);
+  assert.equal(recepcionActiva({ ajustes: { recepcion: true } }), true);
+  assert.equal(recepcionActiva(null), false);
 });

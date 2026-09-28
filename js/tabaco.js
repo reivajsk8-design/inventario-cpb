@@ -4,7 +4,7 @@ import { openSheet, closeSheet, openQtySheet, toast, esc } from './ui.js';
 import { startScanner } from './scanner.js';
 import { matchesEan, openAssignEanSheet } from './eans.js';
 import { cameraSupported, openCamera, closeCamera, resumeCamera, beepError, beepMatch } from './camera-scanner.js';
-import { esTabaco, infoRefs, valesPendientes, descuadres, anulados, totalLineas, fmtFecha, fmtHora, siguienteVale, pinValido, calcularStock } from './tabaco-core.js';
+import { esTabaco, infoRefs, valesPendientes, descuadres, anulados, totalLineas, fmtFecha, fmtHora, siguienteVale, pinValido, calcularStock, recepcionActiva } from './tabaco-core.js';
 import { cargar, guardar, crear, registrar, verificarIntegridad, buscarPersonaPorPin, esAdminPin, registroAnterior, KEY } from './tabaco-store.js';
 import { abrirInventario } from './tabaco-inventario.js';
 import { abrirStock, abrirDescuadres, abrirHistorico, abrirAjustes, compartirTexto } from './tabaco-historico.js';
@@ -170,6 +170,8 @@ export function renderInicio() {
   const e = _estado, stock = e.stock || {}, total = Object.values(stock).reduce((a, b) => a + b, 0), nRefs = Object.keys(stock).length;
   const an = anulados(e.movs), salidas = e.movs.filter(m => m.tipo === 'salida' && !an.has(m.id)), ult = salidas[salidas.length - 1];
   const pend = valesPendientes(e.movs, Date.now(), e.ajustes.horasAvisoVale), desc = descuadres(e.movs).filter(d => d.estado === 'pendiente');
+  // Con la recepción apagada (almacén y tienda en el mismo sitio) el botón solo sale si quedan vales antiguos por confirmar.
+  const recep = recepcionActiva(e);
   const borradorS = e.salidaEnCurso && e.salidaEnCurso.lineas.length, borradorE = e.entradaEnCurso && e.entradaEnCurso.lineas.length, borradorI = e.inventarioEnCurso && Object.keys(e.inventarioEnCurso.contado).length;
   cont().innerHTML = `
     <div class="tb-wrap">
@@ -184,7 +186,7 @@ export function renderInicio() {
       ${pend.filter(v => v.tarde).length ? `<div class="tb-alert">⏳ ${pend.filter(v => v.tarde).map(v => `${esc(v.extra.vale)} (${esc(v.persona.nombre)}, hace ${Math.floor(v.horas)} h)`).join(', ')} sin confirmar en tienda</div>` : ''}
       <div class="tb-actions">
         <button class="tb-btn primary" id="tb-salida">➜ ${borradorS ? `Continuar salida (${e.salidaEnCurso.lineas.length} líneas)` : 'Salida a tienda'}<small>Pistolea los cartones que te llevas. Queda un vale con tu nombre.</small></button>
-        <button class="tb-btn" id="tb-recibir">✔ Recibir en tienda<small>${pend.length} vale${pend.length === 1 ? '' : 's'} en camino</small></button>
+        ${recep || pend.length ? `<button class="tb-btn" id="tb-recibir">✔ Recibir en tienda<small>${pend.length} vale${recep ? (pend.length === 1 ? '' : 's') : (pend.length === 1 ? ' antiguo' : 's antiguos')} en camino</small></button>` : ''}
         <button class="tb-btn" id="tb-entrada">⬅ ${borradorE ? `Continuar entrada (${e.entradaEnCurso.lineas.length} líneas)` : 'Entrada al almacén'}<small>Llega tabaco o vuelve de tienda</small></button>
         <button class="tb-btn" id="tb-inventario">📋 ${borradorI ? 'Continuar inventario' : 'Inventario del almacén'}<small>Contar todo y ajustar el stock</small></button>
         <button class="tb-btn" id="tb-stock">📦 Stock<small>Qué hay ahora mismo</small></button>
@@ -194,7 +196,8 @@ export function renderInicio() {
       </div>
     </div>`;
   document.getElementById('tb-salida').onclick = () => abrirSalida();
-  document.getElementById('tb-recibir').onclick = () => abrirRecepcion();
+  const btnRecibir = document.getElementById('tb-recibir');
+  if (btnRecibir) btnRecibir.onclick = () => abrirRecepcion();
   document.getElementById('tb-entrada').onclick = () => abrirEntrada();
   document.getElementById('tb-inventario').onclick = () => abrirInventario(ctx);
   document.getElementById('tb-stock').onclick = () => abrirStock(ctx);
@@ -380,7 +383,8 @@ async function abrirMovimiento(tipo) {
     enviando = true;
     try {
       const persona = { id: borr.personaId, nombre: borr.personaNombre };
-      const extra = tipo === 'salida' ? { vale: siguienteVale(_estado.movs), destino: 'tienda' } : { motivo: borr.motivo || 'Otro' };
+      // Sin recepción en tienda, la salida nace entregada (quien la saca la entra en tienda): no queda «en camino».
+      const extra = tipo === 'salida' ? { vale: siguienteVale(_estado.movs), destino: 'tienda', ...(recepcionActiva(_estado) ? {} : { sinRecepcion: true }) } : { motivo: borr.motivo || 'Otro' };
       const mov = await registrar(_estado, { tipo, persona, lineas: borr.lineas, nota: borr.nota, extra });
       _estado[clave] = null; guardaAviso(_estado); _onEan = null;
       mostrarVale(mov);
@@ -412,7 +416,7 @@ function textoVale(m) {
   const cab = m.tipo === 'salida' ? `Vale ${x.vale} · salida a tienda` : m.tipo === 'entrada' ? `Entrada al almacén (${x.motivo})` : `Recepción ${x.vale}`;
   const lineas = m.lineas.length ? m.lineas.map(l => `• ${l.qty} × ${l.name} (${l.ref})`) : (m.tipo === 'recepcion' ? ['Nada recibido'] : []);
   const difs = m.tipo === 'recepcion' ? (x.diferencias || []).map(d => `⚠ ${d.name}: enviado ${d.enviado}, recibido ${d.recibido} (${d.dif})`) : [];
-  return [`🚬 ${cab}`, `Terminal ${m.terminal} · ${fmtFecha(m.ts)} ${fmtHora(m.ts)} · ${m.persona.nombre}`, ...lineas, ...difs, `Total: ${totalLineas(m.lineas)} uds`, m.nota ? `Nota: ${m.nota}` : '', `Registro #${m.seq} · ${m.hash.slice(0, 10)}`].filter(Boolean).join('\n');
+  return [`🚬 ${cab}`, `Terminal ${m.terminal} · ${fmtFecha(m.ts)} ${fmtHora(m.ts)} · ${m.persona.nombre}`, ...lineas, ...difs, (m.tipo === 'salida' && x.sinRecepcion) ? 'Entregada en tienda por quien la saca (sin confirmación de recepción)' : '', `Total: ${totalLineas(m.lineas)} uds`, m.nota ? `Nota: ${m.nota}` : '', `Registro #${m.seq} · ${m.hash.slice(0, 10)}`].filter(Boolean).join('\n');
 }
 
 function mostrarVale(m) {

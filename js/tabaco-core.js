@@ -27,9 +27,12 @@ export async function hashPin(pin, salt) {
 export function pinValido(pin) { return /^\d{4,6}$/.test(String(pin)); }
 
 export function nuevoEstado(terminal, admin) {
-  return { v: 1, terminal, creado: new Date().toISOString(), admin, personas: [], ajustes: { horasAvisoVale: 2 },
+  return { v: 1, terminal, creado: new Date().toISOString(), admin, personas: [], ajustes: { horasAvisoVale: 2, recepcion: false },
     movs: [], stock: {}, seq: 0, lastHash: '0', salidaEnCurso: null, entradaEnCurso: null, inventarioEnCurso: null };
 }
+// La recepción en tienda es opcional: apagada, quien saca el tabaco lo entra en tienda y la salida nace entregada
+// (extra.sinRecepcion), sin quedar «en camino». Un estado antiguo sin la clave cuenta como apagada.
+export function recepcionActiva(estado) { return !!(estado && estado.ajustes && estado.ajustes.recepcion); }
 
 export function canonical(obj) {
   return JSON.stringify(obj, (k, v) => (v && typeof v === 'object' && !Array.isArray(v))
@@ -112,7 +115,7 @@ export function anulados(movs) { const s = new Set(); for (const m of movs) if (
 
 export function valesPendientes(movs, ahora = Date.now(), horasAviso = 2) {
   const an = anulados(movs), recibidos = new Set(movs.filter(m => m.tipo === 'recepcion').map(m => m.extra.valeId));
-  return movs.filter(m => m.tipo === 'salida' && !an.has(m.id) && !recibidos.has(m.id))
+  return movs.filter(m => m.tipo === 'salida' && !an.has(m.id) && !recibidos.has(m.id) && !(m.extra || {}).sinRecepcion)
     .map(m => { const horas = (ahora - Date.parse(m.ts)) / 36e5; return { ...m, horas, tarde: horas >= horasAviso }; });
 }
 export function siguienteVale(movs) { return 'V-' + String(movs.filter(m => m.tipo === 'salida').length + 1).padStart(4, '0'); }
@@ -178,7 +181,7 @@ export function detalleMov(m) {
 // quien lo sacó). Lo usan el histórico de la pantalla y la columna «Estado» del Excel.
 export function estadoMov(m, movs) {
   if (anulados(movs).has(m.id)) return 'ANULADA';
-  if (m.tipo === 'salida') return movs.some(x => x.tipo === 'recepcion' && (x.extra || {}).valeId === m.id) ? 'recibido' : 'en camino';
+  if (m.tipo === 'salida') return (m.extra || {}).sinRecepcion ? 'entregada' : movs.some(x => x.tipo === 'recepcion' && (x.extra || {}).valeId === m.id) ? 'recibido' : 'en camino';
   if (m.tipo === 'recepcion') return (m.extra || {}).mismaPersona ? 'recibido · misma persona' : 'recibido';
   return '';
 }

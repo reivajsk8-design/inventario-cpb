@@ -244,9 +244,11 @@ export function abrirHistorico(ctx) {
     const movs = est().movs, an = anulados(movs), pend = new Set(valesPendientes(movs, Date.now(), est().ajustes.horasAvisoVale).map(v => v.id));
     // Quién recibió en tienda este vale (y si hubo pegas), para que el detalle cierre el círculo.
     const rec = m.tipo === 'salida' ? movs.find(x => x.tipo === 'recepcion' && (x.extra || {}).valeId === m.id) : null;
+    // Salida hecha con la recepción apagada: nació entregada, nadie tiene que confirmarla.
+    const sinRec = m.tipo === 'salida' && !!(m.extra || {}).sinRecepcion;
     // La anulación se aplica como resta/suma sobre el stock de AHORA: si después ya se contó el
     // almacén, deshacerla estropearía lo contado. Entonces no se anula: se corrige contando.
-    const sigueVivo = (m.tipo === 'salida' && pend.has(m.id)) || (m.tipo === 'entrada' && !an.has(m.id));
+    const sigueVivo = (m.tipo === 'salida' && (pend.has(m.id) || (sinRec && !an.has(m.id)))) || (m.tipo === 'entrada' && !an.has(m.id));
     const invPosterior = sigueVivo && movs.some(x => x.tipo === 'inventario' && x.seq > m.seq);
     const yaSalio = sigueVivo && !invPosterior && dejariaNegativo(m).length > 0;
     const anulable = sigueVivo && !invPosterior && !yaSalio;
@@ -256,7 +258,7 @@ export function abrirHistorico(ctx) {
       <div class="tb-lines" style="margin:10px 0;max-height:40vh;overflow:auto">${m.lineas.length ? m.lineas.map(l => `<div class="tb-line"><div class="tb-n">${esc(l.name || l.ref)}<div class="tb-m">${esc(l.ref)}${l.ean ? ' · ' + esc(l.ean) : ''}</div></div><div class="tb-q">${l.qty}</div></div>`).join('') : '<div class="tb-empty">Sin líneas (no mueve artículos)</div>'}</div>
       <div class="tb-card">
         <div class="tb-k">${plural(m.lineas.length, 'línea', 'líneas')} · ${totalLineas(m.lineas)} uds</div>
-        ${m.tipo === 'salida' ? (rec
+        ${m.tipo === 'salida' ? (sinRec ? '<div class="tb-s">✔ Entregada en tienda por quien la sacó (confirmación de recepción desactivada)</div>' : rec
           ? `<div class="tb-s">✔ Recibido por ${esc(rec.persona.nombre)} · ${fmtFecha(rec.ts)} ${fmtHora(rec.ts)}${(rec.extra || {}).mismaPersona ? ' · ⚠ misma persona' : ''}${((rec.extra || {}).diferencias || []).length ? ' · con diferencias' : ''}</div>`
           : (an.has(m.id) ? '' : '<div class="tb-s">⏳ En camino: nadie lo ha recibido todavía en tienda</div>')) : ''}
         ${m.nota ? `<div class="tb-s">Nota: ${esc(m.nota)}</div>` : ''}
@@ -392,8 +394,11 @@ export async function abrirAjustes(ctx) {
         ${seccion('Terminal', `
           <div class="chip-row" id="tb-aj-term">${TERMINALS.map(t => `<button class="chip ${t === e.terminal ? 'on' : 'off'}" data-t="${t}">Term. ${t}</button>`).join('')}</div>
           <div class="tb-card"><div class="tb-s">Solo afecta a los movimientos NUEVOS: los que ya están registrados guardan el terminal que tenían.</div></div>`)}
-        ${seccion('Aviso de vale sin recibir', `
-          <div class="tb-row"><input class="tb-input" id="tb-horas" type="number" min="1" max="48" value="${e.ajustes.horasAvisoVale}" style="max-width:120px"><span class="tb-s" style="color:var(--text3);font-size:0.8rem">horas desde que sale el tabaco hasta que el inicio avisa de que nadie lo ha recibido</span></div>`)}
+        ${seccion('Recepción en tienda', `
+          <label class="tb-toggle"><span>Confirmar la recepción en tienda con PIN</span><input type="checkbox" id="tb-recepcion" ${e.ajustes.recepcion ? 'checked' : ''}></label>
+          <div class="tb-card"><div class="tb-s">${e.ajustes.recepcion ? 'Activada: cada salida queda «en camino» hasta que quien la recibe en tienda la confirma con su PIN.' : 'Desactivada: la misma persona saca el tabaco y lo entra en tienda, así que cada salida queda registrada como entregada. Actívala cuando almacén y tienda estén separados.'}</div></div>`)}
+        ${e.ajustes.recepcion ? seccion('Aviso de vale sin recibir', `
+          <div class="tb-row"><input class="tb-input" id="tb-horas" type="number" min="1" max="48" value="${e.ajustes.horasAvisoVale}" style="max-width:120px"><span class="tb-s" style="color:var(--text3);font-size:0.8rem">horas desde que sale el tabaco hasta que el inicio avisa de que nadie lo ha recibido</span></div>`) : ''}
         ${seccion('PIN de administrador', `<button class="tb-btn" id="tb-pin-admin">Cambiar PIN<small>el tuyo, el que abre estos ajustes</small></button>`)}
         ${seccion('Copia de seguridad', `
           <button class="tb-btn" id="tb-copia">⬇ Descargar JSON<small>todo el registro, para guardarlo fuera del móvil</small></button>`)}
@@ -437,7 +442,15 @@ export async function abrirAjustes(ctx) {
       toast('Los movimientos nuevos van al Terminal ' + b.dataset.t, 'green');
       pinta();
     };
-    document.getElementById('tb-horas').onchange = ev => {
+    document.getElementById('tb-recepcion').onchange = ev => {
+      const antes = !!ctx.estado.ajustes.recepcion;
+      ctx.estado.ajustes.recepcion = !!ev.target.checked;
+      if (!ctx.guardar(ctx.estado)) { ctx.estado.ajustes.recepcion = antes; ev.target.checked = antes; return; }
+      toast(ctx.estado.ajustes.recepcion ? 'Recepción en tienda activada: las salidas nuevas quedan en camino hasta que alguien las confirme con su PIN' : 'Recepción en tienda desactivada: las salidas nuevas quedan registradas como entregadas', 'green', 3500);
+      pinta();
+    };
+    const horasEl = document.getElementById('tb-horas');
+    if (horasEl) horasEl.onchange = ev => {
       const n = Math.max(1, Math.min(48, Math.trunc(Number(ev.target.value)) || 2));
       ctx.estado.ajustes.horasAvisoVale = n;
       ev.target.value = n;
