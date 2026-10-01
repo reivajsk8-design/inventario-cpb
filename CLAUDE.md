@@ -195,6 +195,9 @@ Todos inline en el HTML/JS, sin CDN. Usan `stroke="currentColor"` para heredar c
 ---
 
 ## Actualizar la base de datos
+> **Ojo (2026-10-01):** el EAN principal solo se corrige en el Matcher + sync; la PDA solo añade EANs adicionales locales y estos
+> pueden «ganar» al escanear (ver docs/handoff.md 2026-10-01).
+
 
 ```bash
 # 1. Colocar archivos nuevos en C:\Inventario CPB\Inventario CPB\Mejoras App\
