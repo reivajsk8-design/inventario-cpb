@@ -12,7 +12,7 @@ export function setTienda(t) {
 export function tiendaNombre() { return TIENDAS[getTienda() || 'bcn']; }
 
 function botones() {
-  return `<div style="display:flex;gap:10px;margin:14px 0 18px">
+  return `<div style="display:flex;gap:10px;margin:14px 0 18px;width:100%">
     ${Object.keys(TIENDAS).map(k => `
       <button type="button" data-tienda="${k}" style="flex:1;padding:18px 8px;border-radius:14px;font-size:1rem;font-weight:800;
         background:var(--surface2);color:var(--text3)">${k === 'tf' ? '🏝' : '🏙'}<br>${TIENDAS[k]}</button>`).join('')}
@@ -32,7 +32,6 @@ export function ensureTienda() {
     if (getTienda()) { resolve(); return; }
     const el = document.createElement('div');
     el.id = 'welcome-tienda';
-    el.className = 'welcome-overlay';
     el.style.setProperty('--tut-accent', '#0A84FF');
     el.innerHTML = `
       <div class="tut-slides"><div class="tut-slide">

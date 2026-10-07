@@ -13,7 +13,7 @@ const EDIT_FIELDS = [
   { key: 'ean',     label: 'EAN',                   type: 'text'   },
   { key: 'family',  label: 'Familia',               type: 'text'   },
   { key: 'proxium', label: 'Ref. Proveedor',           type: 'text' },
-  { key: 'pvp',     label: 'PVP (€)',               type: 'number' },
+  { key: 'pvp',     label: 'PVP Barcelona (€)',     type: 'number' },
   { key: 'cost',    label: 'Coste (€)',             type: 'number' },
   { key: 'iva',     label: 'IVA (%)',               type: 'number' },
 ];
@@ -76,7 +76,7 @@ function renderList() {
   // Aviso (una vez por sesión): en Tenerife, una base antigua sin pvp_tf deja toda la lista «sin precio Tenerife».
   if (getTienda() === 'tf' && !window._avisoSinTF && _all.length && !_all.some(p => p.pvp_tf != null)) {
     window._avisoSinTF = true;
-    toast('La base de esta PDA no trae precios de Tenerife: pulsa «Actualizar» cuando salga la franja de base nueva', 'amber', 6000);
+    toast('Esta PDA aún no tiene precios de Tenerife. Cuando arriba salga "📦 Nueva base de datos disponible", pulsa Actualizar (o cierra y abre la app).', 'amber', 6000);
   }
 
   const pending = countPending();
@@ -254,7 +254,7 @@ function prodHTML(p, editOvr) {
             `<span style="font-size:0.6rem;color:var(--text3)">▪ ${esc(e)}</span>`
           ).join('')}
         </div>
-        ${p.pvp_tf != null ? `<div style="margin-top:5px;font-size:0.72rem;color:var(--text3)">🏙 Barcelona ${p.pvp ? Number(p.pvp).toFixed(2) + '€' : '—'} · 🏝 Tenerife ${Number(p.pvp_tf).toFixed(2)}€</div>` : ''}
+        ${getTienda() === 'tf' && p.pvp_tf != null && Math.abs(Number(p.pvp_tf) - Number(p.pvp || 0)) > 0.004 ? `<div style="margin-top:5px;font-size:0.72rem;color:var(--text3)">🏙 Barcelona ${p.pvp ? Number(p.pvp).toFixed(2) + '€' : '—'} · 🏝 Tenerife ${Number(p.pvp_tf).toFixed(2)}€</div>` : ''}
         ${p.precio_recom != null ? `<div style="margin-top:5px"><span class="prod-tag" style="background:rgba(0,229,160,0.18);color:var(--green);font-weight:700;font-size:0.68rem" title="Precio recomendado de estantería (coste × margen × IVA, redondeado)">💶 Recom. ${Number(p.precio_recom).toFixed(2)}€</span></div>` : ''}
         ${alcoholBadges(alc)}
         ${perfumeBadges(perf)}
@@ -417,6 +417,7 @@ function openEditSheet(ref) {
                step="${type === 'number' ? '0.01' : undefined}"
                style="width:100%;background:var(--surface2);border-radius:10px;padding:10px 12px;color:var(--text);font-size:0.85rem"
                value="${esc(cur[key] ?? '')}">
+        ${key === 'pvp' && getTienda() === 'tf' ? `<div style="font-size:0.65rem;color:var(--text3);margin-top:4px">El precio de Tenerife se cambia en el Matcher (Tarifas), no aquí</div>` : ''}
       </div>`).join('')}
     <div style="margin-bottom:14px;padding:12px;background:var(--surface2);border-radius:12px">
       <div class="qty-label" style="margin-bottom:8px">EANs adicionales</div>
@@ -569,10 +570,11 @@ function openNewArticleSheet() {
 
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:20px">
       <div>
-        <div class="qty-label" style="margin-bottom:6px">PVP (€)</div>
+        <div class="qty-label" style="margin-bottom:6px">PVP Barcelona (€)</div>
         <input id="na-pvp" type="number" inputmode="decimal" step="0.01" placeholder="0.00"
           style="width:100%;background:var(--surface2);border-radius:10px;padding:10px 12px;
                  color:var(--text);font-size:0.85rem">
+        ${getTienda() === 'tf' ? `<div style="font-size:0.65rem;color:var(--text3);margin-top:4px">El precio de Tenerife se cambia en el Matcher (Tarifas), no aquí</div>` : ''}
       </div>
       <div>
         <div class="qty-label" style="margin-bottom:6px">Coste (€)</div>
