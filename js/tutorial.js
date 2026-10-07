@@ -18,7 +18,7 @@ const SLIDES = [
     accent: '#30D158',
     tab: 'Conteos',
     title: 'Conteos',
-    body: 'Selecciona tu terminal (D, MSC o E) y toca los artículos para registrar cuántas unidades hay en almacén.',
+    body: 'Selecciona tu terminal (D, MSC, E o TF) y toca los artículos para registrar cuántas unidades hay en almacén.',
   },
   {
     icon: '🛒',

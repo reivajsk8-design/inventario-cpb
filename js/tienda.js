@@ -2,6 +2,11 @@
 import { openSheet, closeSheet, toast } from './ui.js';
 import { TIENDAS, normTienda } from './tienda-core.js';
 
+import { esc as escH } from './ui.js';
+import { cargar as cargarTabaco, esAdminPin } from './tabaco-store.js';
+import { pinValido } from './tabaco-core.js';
+import { PIN_SUP_KEY, creaPinSupervisor, compruebaPinSupervisor } from './tienda-core.js';
+
 export function getTienda() {
   try { return normTienda(localStorage.getItem('ic_tienda')); } catch (e) { return null; }
 }
@@ -58,8 +63,65 @@ export function ensureTienda() {
   });
 }
 
-// Hoja para cambiar la tienda desde Resumen.
-export function openCambiarTienda(onDone) {
+// ── Candado de «Cambiar tienda» (07-10-2026, Jose: «que solo yo pueda cambiarla») ──
+// Vale el PIN de administrador del módulo Tabaco si esta PDA lo tiene; si no, un PIN de supervisor propio de la PDA
+// que se crea la primera vez que alguien pulsa Cambiar (y se repite para evitar errores de tecleo). 5 fallos → 30 s.
+let _supFallos = 0, _supBloqueo = 0;
+function leePinSup() { try { return JSON.parse(localStorage.getItem(PIN_SUP_KEY) || 'null'); } catch (e) { return null; } }
+function guardaPinSup(v) { try { localStorage.setItem(PIN_SUP_KEY, JSON.stringify(v)); } catch (e) {} }
+
+function pedirPinNumpad({ titulo, sub, verifica }) {
+  return new Promise(resolve => {
+    let pin = '', resuelto = false;
+    const close = openSheet(`
+      <div class="tb-pin-title">${escH(titulo)}</div>
+      <div class="tb-pin-sub" id="sup-pin-sub">${escH(sub)}</div>
+      <div class="tb-pin-dots" id="sup-dots">${'<i></i>'.repeat(6)}</div>
+      <div class="numpad" id="sup-np">
+        ${[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => `<button class="np-btn" data-n="${n}">${n}</button>`).join('')}
+        <button class="np-btn" data-n="del">⌫</button><button class="np-btn" data-n="0">0</button><button class="np-btn confirm" data-n="ok">✓</button>
+      </div>`, () => { if (!resuelto) { resuelto = true; resolve(null); } });
+    const pinta = () => document.querySelectorAll('#sup-dots i').forEach((d, i) => d.classList.toggle('on', i < pin.length));
+    const msg = t => { const el = document.getElementById('sup-pin-sub'); if (el) el.textContent = t; };
+    document.getElementById('sup-np').addEventListener('click', async e => {
+      const n = e.target.dataset.n; if (!n) return;
+      if (Date.now() < _supBloqueo) { msg(`Demasiados intentos: espera ${Math.ceil((_supBloqueo - Date.now()) / 1000)} s`); return; }
+      if (n === 'del') { pin = pin.slice(0, -1); pinta(); return; }
+      if (n !== 'ok') { if (pin.length < 6) pin += n; pinta(); return; }
+      if (!pinValido(pin)) { msg('El PIN tiene de 4 a 6 dígitos'); return; }
+      if (verifica && !(await verifica(pin))) {
+        _supFallos++; pin = ''; pinta();
+        if (_supFallos >= 5) { _supBloqueo = Date.now() + 30000; _supFallos = 0; msg('Demasiados intentos: espera 30 s'); return; }
+        msg('PIN no reconocido'); return;
+      }
+      _supFallos = 0; resuelto = true; close(); resolve(pin);
+    });
+  });
+}
+
+async function candadoSupervisor() {
+  const tab = cargarTabaco();
+  const admin = (tab && tab.admin && tab.admin.hash) ? tab : null;
+  const sup = leePinSup();
+  if (!admin && !sup) {
+    const p1 = await pedirPinNumpad({ titulo: 'Crea el PIN de supervisor', sub: 'Solo quien lo sepa podrá cambiar la tienda de esta PDA (4 a 6 dígitos)' });
+    if (!p1) return false;
+    const p2 = await pedirPinNumpad({ titulo: 'Repite el PIN', sub: 'Para comprobar que no hay un error de tecleo', verifica: async p => p === p1 });
+    if (!p2) return false;
+    guardaPinSup(await creaPinSupervisor(p1)); toast('PIN de supervisor guardado en esta PDA', 'green');
+    return true;
+  }
+  const pin = await pedirPinNumpad({
+    titulo: 'PIN de supervisor',
+    sub: admin ? 'El PIN de administrador del Tabaco (o el de supervisor)' : 'Solo quien tenga el PIN de supervisor de esta PDA',
+    verifica: async p => (admin ? await esAdminPin(admin, p) : false) || (sup ? await compruebaPinSupervisor(p, sup) : false),
+  });
+  return !!pin;
+}
+
+// Hoja para cambiar la tienda desde Resumen (protegida por el candado de arriba).
+export async function openCambiarTienda(onDone) {
+  if (!(await candadoSupervisor())) return;
   const actual = getTienda() || 'bcn';
   openSheet(`
     <div style="font-size:0.95rem;font-weight:700;color:var(--text);margin-bottom:6px">🏪 Tienda de esta PDA</div>

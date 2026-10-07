@@ -4,6 +4,7 @@ import { getStock }            from './stock.js';
 import { openSheet, closeSheet, toast, esc } from './ui.js';
 import { openExportSheet, getHistory } from './pedidos-export.js';
 import { getTienda, tiendaNombre, openCambiarTienda } from './tienda.js';
+import { TERMINALS } from './terminales.js';
 
 function totalQtyResumen(v) {
   if (!v) return 0;
@@ -204,7 +205,7 @@ function buildEditsRows(editOvr) {
   ];
 }
 
-const TERMINALS = ['D', 'MSC', 'E'];
+// Terminales (D, MSC, E, TF): lista única en js/terminales.js
 
 function ensureTerminal(terminalKey, onConfirmed) {
   const savedTerm = localStorage.getItem(terminalKey) || '';

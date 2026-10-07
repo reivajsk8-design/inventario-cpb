@@ -6,16 +6,12 @@ import { startScanner }                  from './scanner.js';
 import { matchesEan, openAssignEanSheet } from './eans.js';
 import { cameraSupported, openCamera, closeCamera, resumeCamera, beepError } from './camera-scanner.js';
 import { openExportSheet, openHistorySheet, getHistory } from './pedidos-export.js';
+import { TERMINALS, TERM_COLORS, defaultTerminal } from './terminales.js';
+import { getTienda } from './tienda.js';
 
 const QUICK_QTYS = [6, 12, 24, 48];
-const TERMINALS  = ['D', 'MSC', 'E'];
 const PAGE = 50;
-
-const TERM_COLORS = {
-  D:   { bg: '#FF6B00', bgOff: 'rgba(255,107,0,0.12)',   color: '#fff',    colorOff: 'rgba(255,107,0,0.8)'   },
-  MSC: { bg: '#FFD60A', bgOff: 'rgba(255,214,10,0.12)',  color: '#1a1a1a', colorOff: 'rgba(255,214,10,0.85)' },
-  E:   { bg: '#0A84FF', bgOff: 'rgba(10,132,255,0.12)',  color: '#fff',    colorOff: 'rgba(10,132,255,0.8)'  },
-};
+// Terminales (D, MSC, E, TF) y sus colores: lista única en js/terminales.js
 
 let _all = [], _page = 0, _filterBar = null;
 let _query = '', _filterType = 'all', _activeFamilies = [];
@@ -23,7 +19,7 @@ let _onCam = null;
 
 function getOrders()    { return JSON.parse(localStorage.getItem('io') || '{}'); }
 function saveOrders(o)  { localStorage.setItem('io', JSON.stringify(o)); }
-function getTerminal()  { return localStorage.getItem('itp') || TERMINALS[0]; }
+function getTerminal()  { return defaultTerminal(getTienda(), localStorage.getItem('itp')); }   // en una PDA de Tenerife, TF por defecto
 function setTerminal(t) { localStorage.setItem('itp', t); }
 
 export async function mount() {

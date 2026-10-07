@@ -305,3 +305,13 @@ git push origin main
 - **Recepción en tienda opcional (2026-09-28, pedido de Jose tras la prueba real: hoy almacén y tienda están en la misma terminal):** interruptor en ⚙ Ajustes «Confirmar la recepción en tienda con PIN» (`ajustes.recepcion`; **apagado por defecto**, y un estado antiguo sin la clave cuenta como apagado; núcleo `recepcionActiva(estado)`). **Apagado:** el inicio no muestra «Recibir en tienda» (salvo que queden vales antiguos en camino: «N vales antiguos en camino», para poder confirmarlos), la salida se registra con `extra.sinRecepcion: true`, no cuenta en `valesPendientes`, su estado es **«entregada»** (`estadoMov`: histórico, detalle, resguardo y Excel) y se puede anular como una entrada (sin inventario posterior, sin dejar negativos). **Encendido:** todo como antes (vale «en camino» hasta la recepción con PIN; la sección «Aviso de vale sin recibir» solo se enseña encendido). Las salidas registradas apagado NO pasan a «en camino» si luego se enciende.
 - **Hace falta contexto seguro:** los PIN y la cadena de hashes usan `crypto.subtle`, que solo existe en **HTTPS** (o `localhost`). La pestaña Tabaco se usa desde **GitHub Pages**; **nunca** desde `http://192.168.1.20:3001` (ahí no hay `crypto.subtle` y el módulo no arranca).
 - Pruebas: `node --test tests/tabaco-core.test.mjs` (16) y la prueba de pantalla por CDP `humo_tabaco.mjs` del scratchpad (217 comprobaciones, con el Excel real de Jose, las dos ventanas y la manipulación del registro).
+
+## Terminales y candado de tienda (2026-10-07)
+
+- **`js/terminales.js`** (puro, con tests): lista ÚNICA `TERMINALS = ['D','MSC','E','TF']` + `TERM_COLORS` + `defaultTerminal(tienda, guardada)`
+  (TF por defecto en una PDA de Tenerife, D en Barcelona). La usan Pedidos (`itp`), el export de pedidos, Albaranes (`itr`) y Resumen. El módulo
+  Tabaco conserva su propia lista (solo Barcelona).
+- **Candado de «Cambiar tienda»** (Resumen → Tienda → Cambiar): `openCambiarTienda` pasa antes por `candadoSupervisor()` en `js/tienda.js`. Vale el
+  PIN de administrador del módulo Tabaco si la PDA lo tiene; si no, un **PIN de supervisor propio de la PDA** (`localStorage.ic_pinsup` = `{salt, hash}`,
+  PBKDF2 de `tabaco-core`) que se crea la primera vez que alguien pulsa Cambiar (se pide dos veces). 5 fallos seguidos → 30 s de espera. Puros en
+  `tienda-core.js`: `creaPinSupervisor`, `compruebaPinSupervisor`, `PIN_SUP_KEY`. La pregunta inicial «¿De qué tienda es esta PDA?» NO pide PIN.

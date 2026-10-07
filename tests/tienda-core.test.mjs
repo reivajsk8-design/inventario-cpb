@@ -17,3 +17,18 @@ test('precioMostrado: Barcelona usa pvp; Tenerife usa pvp_tf; falta → texto gr
   assert.deepEqual(precioMostrado({ ref: 'VIEJO', pvp: 5 }, 'tf'), { valor: null, texto: 'sin precio Tenerife', falta: true }, 'producto de una base antigua sin el campo');
   assert.deepEqual(precioMostrado({ ref: 'X', pvp: 5 }, null), { valor: 5, texto: '5.00€', falta: false }, 'sin tienda elegida → Barcelona');
 });
+
+import { PIN_SUP_KEY, creaPinSupervisor, compruebaPinSupervisor } from '../js/tienda-core.js';
+
+test('PIN de supervisor: se crea con sal propia, se comprueba y rechaza lo demás', async () => {
+  assert.equal(PIN_SUP_KEY, 'ic_pinsup');
+  const g = await creaPinSupervisor('2468');
+  assert.ok(g && g.salt && g.hash && g.hash !== '2468', 'guardado cifrado, nunca el PIN en claro');
+  assert.equal(await compruebaPinSupervisor('2468', g), true);
+  assert.equal(await compruebaPinSupervisor('2469', g), false);
+  assert.equal(await compruebaPinSupervisor('2468', null), false, 'sin PIN guardado no se puede comprobar');
+  assert.equal(await compruebaPinSupervisor('12', g), false, 'menos de 4 dígitos no vale');
+  assert.equal(await creaPinSupervisor('12'), null, 'no se crea un PIN de menos de 4 dígitos');
+  const g2 = await creaPinSupervisor('2468');
+  assert.notEqual(g2.hash, g.hash, 'cada PDA tiene su sal: el mismo PIN no da el mismo hash');
+});

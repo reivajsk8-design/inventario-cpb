@@ -2,15 +2,10 @@
 import { openDB } from './db.js';
 import { toast, esc, setNavTitle } from './ui.js';
 
-const TERMINALS = ['D', 'MSC', 'E'];
+import { TERMINALS, TERM_COLORS, defaultTerminal } from './terminales.js';   // D, MSC, E, TF
+import { getTienda } from './tienda.js';
 let _photos = [];
 let _lineas = [];
-
-const TERM_COLORS = {
-  D:   { bg: '#FF6B00', bgOff: 'rgba(255,107,0,0.1)',   color: '#fff',    colorOff: 'rgba(255,107,0,0.8)'   },
-  MSC: { bg: '#FFD60A', bgOff: 'rgba(255,214,10,0.1)',  color: '#1a1a1a', colorOff: 'rgba(255,214,10,0.85)' },
-  E:   { bg: '#0A84FF', bgOff: 'rgba(10,132,255,0.1)',  color: '#fff',    colorOff: 'rgba(10,132,255,0.8)'  },
-};
 
 // ── IndexedDB helpers ─────────────────────────────────────────────
 function idbReq(req) {
@@ -147,7 +142,7 @@ function albItemHTML(alb) {
 
 // ── Formulario ────────────────────────────────────────────────────
 function renderForm(alb) {
-  const defTerm   = alb?.terminal || localStorage.getItem('itr') || 'D';
+  const defTerm   = alb?.terminal || defaultTerminal(getTienda(), localStorage.getItem('itr'));
   const defNombre = alb?.nombre   || localStorage.getItem('ic_user') || '';
   let _estado     = alb?.estado   ?? 'conforme';
   let _terminal   = defTerm;

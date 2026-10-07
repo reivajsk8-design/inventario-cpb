@@ -6,10 +6,11 @@ import { openSheet, closeSheet, toast, esc } from './ui.js';
 import { agruparPorProveedor, filasExcel, nombreArchivo, nuevaEntradaHistorial, recortaHistorial,
          quitarDelPedido, repetirEnPedido, fechaHoy, fmtFecha, HIST_KEY, HIST_MAX } from './pedidos-core.js';
 
-const TERMINALS = ['D', 'MSC', 'E'];
+import { TERMINALS, defaultTerminal } from './terminales.js';
+import { getTienda } from './tienda.js';
 const getOrders   = () => JSON.parse(localStorage.getItem('io') || '{}');
 const saveOrders  = (o) => localStorage.setItem('io', JSON.stringify(o));
-const getTerminal = () => localStorage.getItem('itp') || TERMINALS[0];
+const getTerminal = () => defaultTerminal(getTienda(), localStorage.getItem('itp'));
 const setTerminal = (t) => localStorage.setItem('itp', t);
 const getUser     = () => localStorage.getItem('ic_user') || '';
 const sleep       = (ms) => new Promise((r) => setTimeout(r, ms));
