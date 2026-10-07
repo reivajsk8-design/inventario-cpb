@@ -2,6 +2,8 @@
 import { getAllProducts, getFamilies }    from './db.js';
 import { filterProducts, mountFilterBar } from './filters.js';
 import { openSheet, closeSheet, toast, esc }  from './ui.js';
+import { getTienda } from './tienda.js';
+import { precioMostrado } from './tienda-core.js';
 import { getExtraEans, isLocalEan, assignEan, removeLocalEan,
          countPending, clearPendingEans, exportEansJSON } from './eans.js';
 
@@ -70,6 +72,12 @@ function renderList() {
   const main  = document.getElementById('main');
   const items = _filtered.slice(0, (_page + 1) * PAGE);
   const more  = _filtered.length > items.length;
+
+  // Aviso (una vez por sesión): en Tenerife, una base antigua sin pvp_tf deja toda la lista «sin precio Tenerife».
+  if (getTienda() === 'tf' && !window._avisoSinTF && _all.length && !_all.some(p => p.pvp_tf != null)) {
+    window._avisoSinTF = true;
+    toast('La base de esta PDA no trae precios de Tenerife: pulsa «Actualizar» cuando salga la franja de base nueva', 'amber', 6000);
+  }
 
   const pending = countPending();
   const pendingBanner = pending > 0 ? `
@@ -226,7 +234,8 @@ function prodHTML(p, editOvr) {
   } else if (ordered != null) {
     badge = `<div class="prod-qty-badge">${ordered}<small>pedido</small></div>`;
   } else {
-    badge = `<div class="prod-price">${p.pvp ? Number(p.pvp).toFixed(2) + '€' : '—'}</div>`;
+    const pm = precioMostrado(p, getTienda());
+    badge = `<div class="prod-price"${pm.falta ? ' style="color:var(--text3);font-weight:500;font-size:0.72rem"' : ''} title="${getTienda() === 'tf' ? 'PVP Tenerife' : 'PVP Barcelona'}">${pm.texto}</div>`;
   }
 
   return `
@@ -245,6 +254,7 @@ function prodHTML(p, editOvr) {
             `<span style="font-size:0.6rem;color:var(--text3)">▪ ${esc(e)}</span>`
           ).join('')}
         </div>
+        ${p.pvp_tf != null ? `<div style="margin-top:5px;font-size:0.72rem;color:var(--text3)">🏙 Barcelona ${p.pvp ? Number(p.pvp).toFixed(2) + '€' : '—'} · 🏝 Tenerife ${Number(p.pvp_tf).toFixed(2)}€</div>` : ''}
         ${p.precio_recom != null ? `<div style="margin-top:5px"><span class="prod-tag" style="background:rgba(0,229,160,0.18);color:var(--green);font-weight:700;font-size:0.68rem" title="Precio recomendado de estantería (coste × margen × IVA, redondeado)">💶 Recom. ${Number(p.precio_recom).toFixed(2)}€</span></div>` : ''}
         ${alcoholBadges(alc)}
         ${perfumeBadges(perf)}

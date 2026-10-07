@@ -11,6 +11,6 @@ export function precioMostrado(p, tienda) {
   const t = normTienda(tienda) || 'bcn';
   const v = t === 'tf' ? (p && p.pvp_tf) : (p && p.pvp);
   const n = Number(v);
-  if (v == null || !(n > 0)) return { valor: null, texto: t === 'tf' ? 'sin precio TF' : '—', falta: true };
+  if (v == null || !(n > 0)) return { valor: null, texto: t === 'tf' ? 'sin precio Tenerife' : '—', falta: true };
   return { valor: n, texto: n.toFixed(2) + '€', falta: false };
 }

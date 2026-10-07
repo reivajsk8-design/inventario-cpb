@@ -375,7 +375,7 @@
 }
 
 /* ── TUTORIAL / WELCOME OVERLAY ── */
-#tutorial-overlay, #welcome-overlay {
+#tutorial-overlay, #welcome-overlay, #welcome-tienda {
   position: fixed;
   inset: 0;
   background: var(--bg);
@@ -391,7 +391,7 @@
   background: radial-gradient(ellipse 80% 50% at 50% 20%, color-mix(in srgb, var(--tut-accent, #0A84FF) 14%, transparent), transparent 70%);
   pointer-events: none;
 }
-#tutorial-overlay.tut-exit, #welcome-overlay.tut-exit { opacity: 0; }
+#tutorial-overlay.tut-exit, #welcome-overlay.tut-exit, #welcome-tienda.tut-exit { opacity: 0; }
 
 .tut-topbar {
   display: flex;

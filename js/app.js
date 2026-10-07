@@ -12,6 +12,7 @@ import { mount as mountTabaco, unmount as unmountTabaco } from './tabaco.js';
 import { toast, closeSheet, setNavTitle } from './ui.js';
 import { closeCamera } from './camera-scanner.js';
 import { showTutorial } from './tutorial.js';
+import { ensureTienda } from './tienda.js';
 
 const TABS = {
   lista:    { mount: mountLista,    unmount: unmountLista,    title: 'Inventario CPB' },
@@ -117,6 +118,7 @@ async function init() {
   await openDB();
   hideSplash();   // a partir de aquí puede hacer falta interacción (nombre de usuario): fuera el splash
   await ensureUserName();
+  await ensureTienda();
   await loadEansExtra();
 
   const products = await getAllProducts();

@@ -63,9 +63,12 @@ C:\Inventario CPB\          ← GIT ROOT (producción)
     ├── tabaco-store.js     ← Estado `itab` + eslabón duplicado en IndexedDB (`meta` → `tabaco-cadena`)
     ├── tabaco-inventario.js ← Inventario del almacén + «Cargar desde Excel» (PIN admin)
     ├── tabaco-historico.js ← Stock, descuadres/regularización, histórico/anulación, ajustes y exports
+    ├── tienda-core.js      ← Lógica PURA de la tienda de la PDA (Barcelona/Tenerife): `precioMostrado()` (tests/)
+    ├── tienda.js           ← Pregunta «¿De qué tienda es esta PDA?» al arrancar + hoja «Cambiar» en Resumen (`ic_tienda`)
     └── tutorial.js         ← Tutorial de primera vez
 └── tests/pedidos-core.test.mjs ← node --test (lógica de pedidos, 7 pruebas)
 └── tests/tabaco-core.test.mjs  ← node --test (núcleo del tabaco, 15 pruebas)
+└── tests/tienda-core.test.mjs  ← node --test (precio por tienda Barcelona/Tenerife)
 ```
 
 **Carpeta de utilidades** (NO en git):
@@ -95,6 +98,7 @@ C:\Inventario CPB\Inventario CPB\
 | `ic` | `{ ref: { almacen, tienda, notes, ts } }` | Conteos por zona + timestamp |
 | `ic_zona` | `'almacen'` \| `'tienda'` | Zona activa en Conteos |
 | `ic_user` | string | Nombre usuario (obligatorio al inicio) |
+| `ic_tienda` | `'bcn'` | `'tf'` | Tienda de esta PDA (Barcelona / Tenerife): decide qué PVP enseña la Lista. Se pregunta al arrancar (tras el nombre) y se cambia en Resumen. **No confundir con `ic_zona`** |
 | `io` | `{ ref: qty }` | Pedidos |
 | `ie` | `{ ref: { campo: valor } }` | Ediciones locales de productos |
 | `ia` | `{ ref: artículo }` | Artículos nuevos creados localmente |
@@ -118,11 +122,14 @@ En `meta`, la clave **`tabaco-cadena`** guarda `{seq, lastHash, ts}` del último
   "ean": "8435069400010",
   "family": "ABANICOS APARISI",
   "pvp": 3.5,
+  "pvp_tf": 95.5,
   "cost": 0.65,
   "iva": 21,
   "proxium": "BARCELONA/P BIS"
 }
 ```
+
+`pvp_tf` = PVP Tenerife (lo emite el sync desde el Matcher; `null` = no está en la tarifa de Tenerife).
 
 ---
 
@@ -153,6 +160,9 @@ IndexedDB de la app. Además de productos/albaranes/fotos: `getMeta(key)` / `set
 
 ### `tabaco-core.js`
 **Lógica pura, sin DOM** (por eso se prueba con `node --test`): `esTabaco()`, `crearMovimiento()`/`hashDe()`/`verificarCadena()` (cadena SHA-256), `calcularStock()`/`aplicarMovimiento()`, `diferenciasInventario()`, `descuadres()`, `valesPendientes()`/`siguienteVale()`, `estadoMov()` (ANULADA · en camino · recibido · recibido · misma persona), `parseFilasStock()` (Excel de Conteos o de Proxium; las filas **sin cantidad** se saltan y se cuentan en `saltadas`: solo el 0 escrito a propósito es un cero), `filasExcelHistorico()` (**14 columnas**, con `Estado`) / `filasExcelRegularizacion()`, `resumenDia()`, `hashPin()` (**PBKDF2-SHA-256, 60.000 vueltas**) / `pinValido()`.
+
+### `tienda-core.js` / `tienda.js`
+Tienda de la PDA (Barcelona `bcn` / Tenerife `tf`), guardada en `ic_tienda`. `tienda-core.js` es **puro** (`TIENDAS`, `normTienda()`, `precioMostrado(p, tienda) → {valor, texto, falta}`: Barcelona enseña `pvp`, Tenerife `pvp_tf`; si falta, «—» en Barcelona y «sin precio Tenerife» en Tenerife, nunca inventa). `tienda.js`: `getTienda()`, `setTienda()`, `tiendaNombre()`, `ensureTienda()` (overlay `#welcome-tienda` al arrancar, después del nombre) y `openCambiarTienda(onDone)` (hoja desde la fila «Tienda» de Resumen). La Lista pinta el precio con `precioMostrado`, enseña los dos PVP en la tarjeta cuando hay `pvp_tf`, y en Tenerife avisa (toast ámbar, una vez por sesión) si la base no trae ningún `pvp_tf`.
 
 ### `tabaco-store.js`
 Persistencia del módulo: `cargar()`/`guardar()` sobre `itab`, `crear()`, `registrar()` (crea el movimiento encadenado, recalcula el stock, guarda y **duplica el eslabón en IndexedDB**), `verificarIntegridad()`, personas (`altaPersona` —nombre único entre activas, «Administrador» reservado—, `cambiarPinPersona`, `bajaPersona`, `buscarPersonaPorPin`, `esAdminPin`), `exportarCopia()`, `borrarModulo()`, `registroAnterior()`.

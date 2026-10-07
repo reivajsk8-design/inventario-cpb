@@ -3,6 +3,7 @@ import { getAllProducts }      from './db.js';
 import { getStock }            from './stock.js';
 import { openSheet, closeSheet, toast, esc } from './ui.js';
 import { openExportSheet, getHistory } from './pedidos-export.js';
+import { getTienda, tiendaNombre, openCambiarTienda } from './tienda.js';
 
 function totalQtyResumen(v) {
   if (!v) return 0;
@@ -44,6 +45,12 @@ function render() {
       <span style="font-size:1rem">👤</span>
       <span style="font-size:0.88rem;font-weight:700;color:var(--text);flex:1">${userName ? esc(userName) : '<span style="color:var(--text3)">Sin nombre</span>'}</span>
       <button id="btn-change-name" style="font-size:0.72rem;color:var(--accent);font-weight:700;padding:4px 10px;
+        background:rgba(10,132,255,0.1);border-radius:8px">Cambiar</button>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;padding:4px 4px 2px">
+      <span style="font-size:1rem">${getTienda() === 'tf' ? '🏝' : '🏙'}</span>
+      <span style="font-size:0.88rem;font-weight:700;color:var(--text);flex:1">Tienda: ${esc(tiendaNombre())}</span>
+      <button id="btn-change-tienda" style="font-size:0.72rem;color:var(--accent);font-weight:700;padding:4px 10px;
         background:rgba(10,132,255,0.1);border-radius:8px">Cambiar</button>
     </div>
     <div class="stat-grid">
@@ -105,6 +112,8 @@ function render() {
 
   document.getElementById('btn-exp-new')?.addEventListener('click', () =>
     ensureTerminal('itr', () => exportExcel('articulos_nuevos', buildNewArtsRows(newArts), localStorage.getItem('itr') || '')));
+
+  document.getElementById('btn-change-tienda').addEventListener('click', () => openCambiarTienda(render));
 
   document.getElementById('btn-change-name').addEventListener('click', () => {
     const current = localStorage.getItem('ic_user') || '';
