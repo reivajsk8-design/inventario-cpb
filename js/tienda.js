@@ -11,7 +11,7 @@ export function setTienda(t) {
 }
 export function tiendaNombre() { return TIENDAS[getTienda() || 'bcn']; }
 
-function botones(idSel) {
+function botones() {
   return `<div style="display:flex;gap:10px;margin:14px 0 18px">
     ${Object.keys(TIENDAS).map(k => `
       <button type="button" data-tienda="${k}" style="flex:1;padding:18px 8px;border-radius:14px;font-size:1rem;font-weight:800;

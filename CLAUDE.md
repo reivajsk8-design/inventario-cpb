@@ -98,7 +98,7 @@ C:\Inventario CPB\Inventario CPB\
 | `ic` | `{ ref: { almacen, tienda, notes, ts } }` | Conteos por zona + timestamp |
 | `ic_zona` | `'almacen'` \| `'tienda'` | Zona activa en Conteos |
 | `ic_user` | string | Nombre usuario (obligatorio al inicio) |
-| `ic_tienda` | `'bcn'` | `'tf'` | Tienda de esta PDA (Barcelona / Tenerife): decide qué PVP enseña la Lista. Se pregunta al arrancar (tras el nombre) y se cambia en Resumen. **No confundir con `ic_zona`** |
+| `ic_tienda` | `'bcn'` \| `'tf'` | Tienda de esta PDA (Barcelona / Tenerife): decide qué PVP enseña la Lista. Se pregunta al arrancar (tras el nombre) y se cambia en Resumen. **No confundir con `ic_zona`** |
 | `io` | `{ ref: qty }` | Pedidos |
 | `ie` | `{ ref: { campo: valor } }` | Ediciones locales de productos |
 | `ia` | `{ ref: artículo }` | Artículos nuevos creados localmente |
