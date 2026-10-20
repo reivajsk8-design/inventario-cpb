@@ -51,7 +51,7 @@ C:\Inventario CPB\          ← GIT ROOT (producción)
     ├── stock.js            ← getStock/saveStock/clearStock, parseStockXLSX
     ├── ui.js               ← toast(), openSheet(), closeSheet(), openQtySheet(), openCountSheet()
     ├── eans.js             ← matchesEan(), openAssignEanSheet()
-    ├── lista.js            ← Tab Lista: catálogo + edición local + conteo con zona
+    ├── lista.js            ← Tab Lista: catálogo + edición local + conteo con zona + pistola (abre la ficha Conteo/Pedido)
     ├── conteos.js          ← Tab Conteos: conteo por zonas + cámara + comparación stock
     ├── pedidos.js          ← Tab Pedidos: gestión de pedidos + cámara (nav-right)
     ├── pedidos-core.js     ← Lógica PURA de pedidos: reparto por proveedor, filas Excel, historial, repetir (tests/)
@@ -268,6 +268,7 @@ git push origin main
 | 2026-07-14 | Chequeo de seguridad: `esc()` (en `ui.js`, exportada) anti-XSS en innerHTML de todas las vistas (nombres/proveedor/notas) |
 | 2026-07-14 | SRI (`integrity`) en pako (CDN); `.gitignore` endurecido (no publicar `*.cjs`/`*.bat`/backups/ruta interna); permisos de carpeta restringidos |
 | 2026-07-14 | PENDIENTE (decisión del usuario): la app + `db.json.gz` (costes/márgenes) son PÚBLICAS en GitHub Pages → falta control de acceso (Cloudflare Access u otro) |
+| 2026-10-20 | **Pistola en Lista**: al leer un código de barras en la pestaña Lista se abre la ficha del artículo (Conteo / Pedido), igual que en Pedidos y Conteos; EAN desconocido → pita y ofrece asignarlo. Lista ahora coge la pistola al montar (`_gen` como Tabaco) y la suelta al salir (`startScanner(null)`): antes se quedaba con la de la pestaña anterior (p. ej. pistolear en Lista tras Pedidos sumaba al pedido). Humo CDP `humo_lista_pistola.mjs` (scratchpad, 6/6) |
 
 ---
 

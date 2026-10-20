@@ -5,7 +5,10 @@ import { openSheet, closeSheet, toast, esc }  from './ui.js';
 import { getTienda } from './tienda.js';
 import { precioMostrado } from './tienda-core.js';
 import { getExtraEans, isLocalEan, assignEan, removeLocalEan,
-         countPending, clearPendingEans, exportEansJSON } from './eans.js';
+         countPending, clearPendingEans, exportEansJSON,
+         matchesEan, openAssignEanSheet } from './eans.js';
+import { startScanner } from './scanner.js';
+import { beepError } from './camera-scanner.js';
 
 const PAGE = 50;
 const EDIT_FIELDS = [
@@ -27,6 +30,7 @@ function getNewArticles() {
 
 let _all = [], _filtered = [], _page = 0, _filterBar = null;
 let _rawAll = [];
+let _gen = 0;   // número de montaje: lo que siga montándose tras cambiar de pestaña se abandona (no coge la pistola)
 
 function getCounts() { return JSON.parse(localStorage.getItem('ic') || '{}'); }
 function saveCounts(c) { localStorage.setItem('ic', JSON.stringify(c)); }
@@ -41,12 +45,15 @@ function totalQty(c) {
 }
 
 export async function mount() {
+  const gen = ++_gen;
   _rawAll = await getAllProducts();
+  if (gen !== _gen) return;   // ya no estamos en Lista
   const editOvr = JSON.parse(localStorage.getItem('ie') || '{}');
   const newArts = getNewArticles();
   _all = [..._rawAll, ...newArts].map(p => editOvr[p.ref] ? { ...p, ...editOvr[p.ref] } : p);
 
   const families = await getFamilies();
+  if (gen !== _gen) return;
   _filterBar = mountFilterBar(families, ({ query, filterType, families: fams }) => {
     _filtered = filterProducts(_all, query, filterType, fams);
     _page = 0;
@@ -55,9 +62,23 @@ export async function mount() {
 
   _filtered = [..._all];
   renderList();
+
+  // Pistola (lector de código de barras), igual que en Pedidos y Conteos: abre la ficha del artículo
+  // (Conteo / Pedido). Si el EAN no es de nadie, pita y ofrece asignarlo a un artículo.
+  startScanner(ean => {
+    const p = _all.find(x => matchesEan(x, ean));
+    if (!p) {
+      beepError();
+      openAssignEanSheet(ean, _all, product => { renderList(); openProductSheet(product.ref); });
+      return;
+    }
+    openProductSheet(p.ref);
+  });
 }
 
 export function unmount() {
+  _gen++;               // lo que quede montándose se abandona
+  startScanner(null);   // suelta la pistola: si no, seguiría abriendo fichas de Lista en Resumen, Albaranes…
   if (_filterBar) _filterBar.hide();
 }
 
