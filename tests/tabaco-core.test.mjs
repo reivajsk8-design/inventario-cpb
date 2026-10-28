@@ -1,7 +1,7 @@
 // node --test tests/tabaco-core.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { esTabaco, nuevoEstado, canonical, hashPin, nuevoSalt, crearMovimiento, verificarCadena, calcularStock, diferenciasInventario, descuadres, valesPendientes, siguienteVale, parseFilasStock, filasExcelHistorico, filasExcelRegularizacion, resumenDia, nombreArchivo, infoRefs, pinValido, estadoMov, recepcionActiva } from '../js/tabaco-core.js';
+import { esTabaco, nuevoEstado, canonical, hashPin, nuevoSalt, crearMovimiento, verificarCadena, calcularStock, diferenciasInventario, descuadres, valesPendientes, siguienteVale, parseFilasStock, filasExcelHistorico, filasExcelRegularizacion, resumenDia, nombreArchivo, infoRefs, pinValido, estadoMov, recepcionActiva, parseFilasPedido, refPedidoDeNombre, etiquetaPedido } from '../js/tabaco-core.js';
 
 const ANA = { id: 'p_ana', nombre: 'Ana' }, LUIS = { id: 'p_luis', nombre: 'Luis' };
 const L = (ref, qty, name = ref, ean = '') => ({ ref, qty, name, ean });
@@ -189,4 +189,34 @@ test('recepción desactivada: la salida marcada sinRecepcion no queda «en camin
   assert.equal(recepcionActiva({ ajustes: {} }), false);
   assert.equal(recepcionActiva({ ajustes: { recepcion: true } }), true);
   assert.equal(recepcionActiva(null), false);
+});
+
+test('parseFilasPedido: Excel COMPRA de TransferScan — suma códigos repetidos, cuenta filas sin código y salta cantidades no válidas', () => {
+  const compra = [['Partida', 'Código Proxium', 'Código factura', 'Descripción', 'Unidades', 'Precio', 'Porte/ud', 'Coste final'],
+    [1, 'MARG40', '100157', 'CARTON MARLBORO GOLD 3.0', 30, 45.2, 0.12, 45.32],
+    [1, 'MARG40', '100157', 'CARTON MARLBORO GOLD 3.0 — 2 dobles ABIERTOS → 10 sueltos', 10, 45.2, 0.12, 45.32],
+    [2, 'TERW20', '100578', 'CARTON TEREA WARM', 12, 50, 0.1, 50.1],
+    [3, '', '100999', 'CARTON NUEVO SIN ALTA', 3, 40, 0.1, 40.1],
+    ['', '', '', '', '', '', '', ''],
+    [4, 'CAMF20', '100600', 'CARTON CAMEL BLUE', 'x', 40, 0.1, 40.1]];
+  const r = parseFilasPedido(compra);
+  assert.deepEqual(r.lineas, [{ ref: 'MARG40', name: 'CARTON MARLBORO GOLD 3.0', ean: '', qty: 40 }, { ref: 'TERW20', name: 'CARTON TEREA WARM', ean: '', qty: 12 }]);
+  assert.equal(r.sinCodigo, 1); assert.equal(r.saltadas, 1); assert.equal(r.cabecera, 1);
+});
+
+test('parseFilasPedido: también lee REF + Almacén (Conteos) y Artículo + Cantidad (Proxium); sin cabecera lanza', () => {
+  const conteos = [['Usuario', 'Terminal', 'REF', 'Nombre', 'EAN', 'Ref. Proveedor', 'Familia', 'Almacén', 'Tienda', 'Total'],
+    ['Olek', 'MSC', 'MARG40', 'CARTON MARLBORO GOLD 3.0', '7622100912392', '100157', 'CISA', '79', '0', '79']];
+  assert.deepEqual(parseFilasPedido(conteos).lineas, [{ ref: 'MARG40', name: 'CARTON MARLBORO GOLD 3.0', ean: '7622100912392', qty: 79 }]);
+  const proxium = [['Listado: Pedido'], [], ['Artículo', 'Descripción', 'Bultos', 'Cantidad', 'Un. cant.'], ['CAMF20', 'CARTON CAMEL BLUE', '3', '112', 'CT']];
+  assert.deepEqual(parseFilasPedido(proxium).lineas, [{ ref: 'CAMF20', name: 'CARTON CAMEL BLUE', ean: '', qty: 112 }]);
+  assert.throws(() => parseFilasPedido([['Hola', 'Mundo'], [1, 2]]), /cabecera/);
+});
+
+test('refPedidoDeNombre y etiquetaPedido: nombre de TransferScan y nombre cualquiera', () => {
+  assert.deepEqual(refPedidoDeNombre('COMPRA_CISA_FT2026-123_ARC-00005678.xlsx'), { proveedor: 'CISA', factura: '2026-123', arc: '00005678' });
+  assert.deepEqual(refPedidoDeNombre('compra_cisa_ft2026-9_arc-ES00123456.XLS'), { proveedor: 'cisa', factura: '2026-9', arc: 'ES00123456' });
+  assert.deepEqual(refPedidoDeNombre('pedido raro.xlsx'), { proveedor: '', factura: '', arc: '' });
+  assert.equal(etiquetaPedido({ archivo: 'COMPRA_CISA_FT2026-123_ARC-00005678.xlsx', factura: '2026-123' }), 'FT 2026-123');
+  assert.equal(etiquetaPedido({ archivo: 'pedido raro.xlsx', factura: '' }), 'pedido raro.xlsx');
 });

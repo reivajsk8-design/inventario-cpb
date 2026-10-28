@@ -161,6 +161,44 @@ export function parseFilasStock(rows) {
   throw new Error('No encontré la cabecera: espero "REF + Almacén" (export de Conteos) o "Artículo + Cantidad" (Proxium)');
 }
 
+// Pedido esperado: el Excel de compra de TransferScan (también sirve Conteos o Proxium). Las filas del
+// mismo código se suman (dobles partidos, varias partidas); las que no traen código (artículo aún sin
+// alta en Proxium) se cuentan en sinCodigo y no se cargan. La columna se elige por prioridad de alias.
+export function parseFilasPedido(rows) {
+  const norm = v => String(v ?? '').trim(), low = v => norm(v).toLowerCase();
+  const REF = ['código proxium', 'codigo proxium', 'ref', 'artículo', 'articulo', 'código', 'codigo'], QTY = ['unidades', 'almacén', 'almacen', 'cantidad', 'stock', 'disponible'], NOM = ['descripción', 'descripcion', 'nombre'];
+  const col = (h, alias) => { for (const a of alias) { const x = h.indexOf(a); if (x >= 0) return x; } return -1; };
+  for (let i = 0; i < Math.min(rows.length, 15); i++) {
+    const h = (rows[i] || []).map(low);
+    const iRef = col(h, REF), iQty = col(h, QTY); if (iRef < 0 || iQty < 0) continue;
+    const iNom = col(h, NOM), iEan = h.indexOf('ean');
+    const porRef = new Map();
+    let sinCodigo = 0, saltadas = 0;
+    for (const r of rows.slice(i + 1)) {
+      const f = r || [], ref = norm(f[iRef]), cruda = norm(f[iQty]);
+      const q = cruda === '' ? NaN : Math.trunc(Number(cruda.replace(',', '.'))), vale = Number.isFinite(q) && q > 0;
+      if (!ref) { if (vale) sinCodigo++; continue; }
+      if (!vale) { saltadas++; continue; }
+      const name = iNom >= 0 ? norm(f[iNom]) : '', ean = iEan >= 0 ? norm(f[iEan]) : '';
+      const l = porRef.get(ref);
+      if (!l) { porRef.set(ref, { ref, name, ean, qty: q }); continue; }
+      l.qty += q; if (!l.name) l.name = name; if (!l.ean) l.ean = ean;
+    }
+    return { lineas: [...porRef.values()], sinCodigo, saltadas, cabecera: i + 1 };
+  }
+  throw new Error('No encontré la cabecera: espero "Código Proxium + Unidades" (TransferScan), "REF + Almacén" (Conteos) o "Artículo + Cantidad" (Proxium)');
+}
+// Proveedor, factura y ARC desde el nombre que pone TransferScan: COMPRA_<prov>_FT<factura>_ARC-<arc>.xlsx
+export function refPedidoDeNombre(nombre) {
+  const m = /^COMPRA_([^_]+)_FT(.+?)_ARC-([^.]+)\.xlsx?$/i.exec(String(nombre ?? ''));
+  return m ? { proveedor: m[1], factura: m[2], arc: m[3] } : { proveedor: '', factura: '', arc: '' };
+}
+// Cómo se nombra un pedido en pantalla y en el Excel: por su factura si la hay; si no, por el archivo.
+export function etiquetaPedido(pedido) {
+  const p = pedido || {}, ft = String(p.factura ?? '').trim();
+  return ft ? 'FT ' + ft : String(p.archivo ?? '');
+}
+
 export function fmtFecha(iso) { const d = new Date(iso); return String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0') + '/' + d.getFullYear(); }
 export function fmtHora(iso) { const d = new Date(iso); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); }
 export function mismoDia(a, b) { return fmtFecha(a) === fmtFecha(b); }
