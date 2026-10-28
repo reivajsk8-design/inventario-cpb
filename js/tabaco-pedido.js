@@ -1,7 +1,7 @@
 // js/tabaco-pedido.js — recibir un pedido de tabaco contra lo esperado: carga del Excel de compra (TransferScan), ficha del pedido y botón del inicio
 import { openSheet, toast, esc } from './ui.js';
 import { parseFilasPedido, refPedidoDeNombre, etiquetaPedido, nuevoId, fmtFecha, fmtHora, totalLineas } from './tabaco-core.js';
-import { ensureXLSX } from './tabaco-historico.js';   // la librería de Excel se carga en un solo sitio del módulo
+import { elegirYLeerExcel } from './tabaco-historico.js';   // la librería de Excel (y su lectura) vive en un solo sitio del módulo
 
 // Mientras se teclea el PIN (o se elige el archivo) otra ventana puede haber cambiado el registro
 // y `mount()` habrá cargado un estado nuevo: entonces no se sigue con el de antes.
@@ -83,44 +83,28 @@ async function cargarExcelPedido(ctx) {
   if (previo && previo.recepcion) return toast('Hay un conteo empezado sobre el pedido actual: cancélalo antes de cargar otro', 'red', 4000);
   if (previo && !confirm(`Ya hay un pedido cargado (${etiquetaPedido(previo)}). ¿Sustituirlo por el nuevo Excel?`)) return;
   const ok = await ctx.pedirPin({ admin: true }); if (ok !== 'admin' || !mismoEstado(ctx, e)) return;
-  const inp = document.createElement('input');
-  inp.type = 'file'; inp.accept = '.xlsx,.xls';
-  inp.onchange = async () => {
-    const f = inp.files[0]; if (!f) return;
-    try {
-      const XLSX = await ensureXLSX();
-      const wb = XLSX.read(await f.arrayBuffer(), { type: 'array' });
-      let res = null, err = null;
-      for (const nombre of wb.SheetNames) {   // se prueban todas las hojas: una con solo la cabecera no corta la búsqueda
-        try {
-          const r = parseFilasPedido(XLSX.utils.sheet_to_json(wb.Sheets[nombre], { header: 1, raw: true, defval: '' }));
-          res = r;
-          if (r.lineas.length) break;
-        } catch (e2) { err = e2; }
-      }
-      if (!res) throw err || new Error('El Excel no tiene filas con datos');
-      // El pedido es SOLO del tabaco: lo que la app conoce y no es tabaco se queda fuera.
-      const tabaco = new Map(ctx.catalogo().map(p => [p.ref, p]));
-      const lineas = [], desconocidas = [];
-      let noTabaco = 0;
-      for (const l of res.lineas) {
-        const p = tabaco.get(l.ref);
-        if (!p && ctx.producto(l.ref)) { noTabaco++; continue; }
-        lineas.push({ ref: l.ref, name: (p && p.name) || l.name || l.ref, ean: (p && p.ean) || l.ean || '', qty: l.qty });
-        if (!p) desconocidas.push(l.ref);
-      }
-      if (!lineas.length) return toast('El Excel no tiene líneas de tabaco con código', 'red', 4000);   // el pedido anterior se queda
-      if (!mismoEstado(ctx, e)) return;
-      if (e.pedido && e.pedido.recepcion) return toast('Hay un conteo empezado sobre el pedido actual: cancélalo antes de cargar otro', 'red', 4000);
-      const { proveedor, factura, arc } = refPedidoDeNombre(f.name);
-      const avisos = { sinCodigo: res.sinCodigo || 0, noTabaco, desconocidas };
-      const anterior = e.pedido;
-      e.pedido = { id: nuevoId('pd'), archivo: f.name, proveedor, factura, arc, cargado: new Date().toISOString(), lineas, avisos, recepcion: null };
-      if (!ctx.guardar(e)) { e.pedido = anterior; return; }
-      const partes = partesAvisos(avisos);
-      toast(`Pedido cargado: ${lineas.length} artículos · ${totalLineas(lineas)} uds` + partes.map(x => ' · ' + x).join(''), partes.length ? 'red' : 'green', 5000);
-      ctx.refrescar();
-    } catch (err2) { toast((err2 && err2.message) || 'No se pudo leer el Excel', 'red', 4000); }
-  };
-  inp.click();
+  try {
+    const { res, archivo } = await elegirYLeerExcel(parseFilasPedido, r => r.lineas.length);
+    // El pedido es SOLO del tabaco: lo que la app conoce y no es tabaco se queda fuera.
+    const tabaco = new Map(ctx.catalogo().map(p => [p.ref, p]));
+    const lineas = [], desconocidas = [];
+    let noTabaco = 0;
+    for (const l of res.lineas) {
+      const p = tabaco.get(l.ref);
+      if (!p && ctx.producto(l.ref)) { noTabaco++; continue; }
+      lineas.push({ ref: l.ref, name: (p && p.name) || l.name || l.ref, ean: (p && p.ean) || l.ean || '', qty: l.qty });
+      if (!p) desconocidas.push(l.ref);
+    }
+    if (!lineas.length) return toast('El Excel no tiene líneas de tabaco con código', 'red', 4000);   // el pedido anterior se queda
+    if (!mismoEstado(ctx, e)) return;
+    if (e.pedido && e.pedido.recepcion) return toast('Hay un conteo empezado sobre el pedido actual: cancélalo antes de cargar otro', 'red', 4000);
+    const { proveedor, factura, arc } = refPedidoDeNombre(archivo);
+    const avisos = { sinCodigo: res.sinCodigo || 0, noTabaco, desconocidas };
+    const anterior = e.pedido;
+    e.pedido = { id: nuevoId('pd'), archivo, proveedor, factura, arc, cargado: new Date().toISOString(), lineas, avisos, recepcion: null };
+    if (!ctx.guardar(e)) { e.pedido = anterior; return; }
+    const partes = partesAvisos(avisos);
+    toast(`Pedido cargado: ${lineas.length} artículos · ${totalLineas(lineas)} uds` + partes.map(x => ' · ' + x).join(''), partes.length ? 'red' : 'green', 5000);
+    ctx.refrescar();
+  } catch (err) { toast((err && err.message) || 'No se pudo leer el Excel', 'red', 4000); }
 }

@@ -13,7 +13,7 @@ const ROT = 'font-size:0.7rem;color:var(--text3);font-weight:700;text-transform:
 const plural = (n, uno, varios) => n + ' ' + (n === 1 ? uno : varios);
 
 // La librería de Excel solo se baja si de verdad se va a exportar (igual que en Conteos/Resumen).
-// Vive aquí y la reutiliza `tabaco-inventario.js` (una sola copia en todo el módulo).
+// Vive aquí y la reutilizan `tabaco-inventario.js` y `tabaco-pedido.js` (una sola copia en todo el módulo).
 export function ensureXLSX() {
   return new Promise((resolve, reject) => {
     if (window.XLSX) return resolve(window.XLSX);
@@ -22,6 +22,34 @@ export function ensureXLSX() {
     s.onload = () => resolve(window.XLSX);
     s.onerror = () => reject(new Error('No se pudo cargar la librería de Excel (¿sin internet?)'));
     document.head.appendChild(s);
+  });
+}
+
+// Pide un Excel (.xlsx/.xls) y lo lee con `parse(filas)` probando todas las hojas: se queda con la
+// primera en la que `tieneDatos(res)` (una hoja con solo la cabecera no corta la búsqueda) o, si
+// ninguna, con la última que se pudo leer. Resuelve { res, archivo }; si no se elige nada, no resuelve.
+// Los fallos (sin librería, sin cabecera…) llegan como rechazo para que quien llama avise.
+export function elegirYLeerExcel(parse, tieneDatos) {
+  return new Promise((resolve, reject) => {
+    const inp = document.createElement('input');
+    inp.type = 'file'; inp.accept = '.xlsx,.xls';
+    inp.onchange = async () => {
+      const f = inp.files[0]; if (!f) return;
+      try {
+        const XLSX = await ensureXLSX();
+        const wb = XLSX.read(await f.arrayBuffer(), { type: 'array' });
+        let res = null, err = null;
+        for (const nombre of wb.SheetNames) {
+          try {
+            res = parse(XLSX.utils.sheet_to_json(wb.Sheets[nombre], { header: 1, raw: true, defval: '' }));
+            if (tieneDatos(res)) break;
+          } catch (e2) { err = e2; }
+        }
+        if (!res) throw err || new Error('El Excel no tiene filas con datos');
+        resolve({ res, archivo: f.name });
+      } catch (e) { reject(e); }
+    };
+    inp.click();
   });
 }
 
