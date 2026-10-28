@@ -7,6 +7,7 @@ import { cameraSupported, openCamera, closeCamera, resumeCamera, beepError, beep
 import { esTabaco, infoRefs, valesPendientes, descuadres, anulados, totalLineas, fmtFecha, fmtHora, siguienteVale, pinValido, calcularStock, recepcionActiva } from './tabaco-core.js';
 import { cargar, guardar, crear, registrar, verificarIntegridad, buscarPersonaPorPin, esAdminPin, registroAnterior, KEY } from './tabaco-store.js';
 import { abrirInventario } from './tabaco-inventario.js';
+import { abrirPedido, textoBotonPedido } from './tabaco-pedido.js';
 import { abrirStock, abrirDescuadres, abrirHistorico, abrirAjustes, compartirTexto } from './tabaco-historico.js';
 
 const TERMINALS = ['D', 'MSC', 'E'];
@@ -83,7 +84,7 @@ export async function mount() {
   const navBtn = document.getElementById('btn-nav-right');
   if (cameraSupported()) {
     navBtn.textContent = '📷';
-    navBtn.onclick = () => { if (_onEan) _onCam(); else toast('Abre una salida, entrada o inventario para escanear'); };
+    navBtn.onclick = () => { if (_onEan) _onCam(); else toast('Abre una salida, entrada, recepción de pedido o inventario para escanear'); };
   }
   _onCam = () => openCamera(ean => manejarEan(ean, () => resumeCamera()), toast);
   document.getElementById('btn-cam-close').addEventListener('click', () => closeCamera());
@@ -105,7 +106,7 @@ export function unmount() {
 // Una lectura (pistola o cámara). `onDone` reanuda la cámara: la pantalla que escucha
 // (`_onEan`) recibe el artículo y decide cuándo ha terminado (al confirmar la cantidad).
 function manejarEan(ean, onDone) {
-  if (!_onEan) { beepError(); toast('Abre una salida, entrada o inventario para escanear'); return; }
+  if (!_onEan) { beepError(); toast('Abre una salida, entrada, recepción de pedido o inventario para escanear'); return; }
   const p = _all.find(x => matchesEan(x, ean));
   // Siga como siga la lectura (cantidad confirmada, asignar el EAN o cerrar la hoja), hay que reanudar la cámara una sola vez.
   let hecho = false;
@@ -173,6 +174,7 @@ export function renderInicio() {
   // Con la recepción apagada (almacén y tienda en el mismo sitio) el botón solo sale si quedan vales antiguos por confirmar.
   const recep = recepcionActiva(e);
   const borradorS = e.salidaEnCurso && e.salidaEnCurso.lineas.length, borradorE = e.entradaEnCurso && e.entradaEnCurso.lineas.length, borradorI = e.inventarioEnCurso && Object.keys(e.inventarioEnCurso.contado).length;
+  const ped = textoBotonPedido(e);   // botón «📦 Recibir pedido» (y su aviso si hay un pedido esperando el palé)
   cont().innerHTML = `
     <div class="tb-wrap">
       <div class="tb-banner ${_integridad.ok ? 'ok' : 'bad'}" id="tb-integ">${_integridad.ok ? `✔ Registro íntegro · ${e.movs.length} movimientos · Terminal ${esc(e.terminal)}` : `⚠ Registro alterado: ${esc(_integridad.problemas.join(' · '))}`}</div>
@@ -184,10 +186,12 @@ export function renderInicio() {
       ${textoRegistroAnterior(_anterior) ? `<div class="tb-alert">⚠ ${esc(textoRegistroAnterior(_anterior))}</div>` : ''}
       ${desc.length ? `<div class="tb-alert">⚠ ${desc.length} descuadre${desc.length === 1 ? '' : 's'} pendiente${desc.length === 1 ? '' : 's'} de regularizar</div>` : ''}
       ${pend.filter(v => v.tarde).length ? `<div class="tb-alert">⏳ ${pend.filter(v => v.tarde).map(v => `${esc(v.extra.vale)} (${esc(v.persona.nombre)}, hace ${Math.floor(v.horas)} h)`).join(', ')} sin confirmar en tienda</div>` : ''}
+      ${ped.aviso ? `<div class="tb-alert">${esc(ped.aviso)}</div>` : ''}
       <div class="tb-actions">
         <button class="tb-btn primary" id="tb-salida">➜ ${borradorS ? `Continuar salida (${e.salidaEnCurso.lineas.length} líneas)` : 'Salida a tienda'}<small>Pistolea los cartones que te llevas. Queda un vale con tu nombre.</small></button>
         ${recep || pend.length ? `<button class="tb-btn" id="tb-recibir">✔ Recibir en tienda<small>${pend.length} vale${recep ? (pend.length === 1 ? '' : 's') : (pend.length === 1 ? ' antiguo' : 's antiguos')} en camino</small></button>` : ''}
         <button class="tb-btn" id="tb-entrada">⬅ ${borradorE ? `Continuar entrada (${e.entradaEnCurso.lineas.length} líneas)` : 'Entrada al almacén'}<small>Llega tabaco o vuelve de tienda</small></button>
+        <button class="tb-btn" id="tb-pedido">📦 ${esc(ped.titulo)}<small>${esc(ped.sub)}</small></button>
         <button class="tb-btn" id="tb-inventario">📋 ${borradorI ? 'Continuar inventario' : 'Inventario del almacén'}<small>Contar todo y ajustar el stock</small></button>
         <button class="tb-btn" id="tb-stock">📦 Stock<small>Qué hay ahora mismo</small></button>
         <button class="tb-btn" id="tb-descuadres">⚠ Descuadres<small>${desc.length} pendiente${desc.length === 1 ? '' : 's'}</small></button>
@@ -199,6 +203,7 @@ export function renderInicio() {
   const btnRecibir = document.getElementById('tb-recibir');
   if (btnRecibir) btnRecibir.onclick = () => abrirRecepcion();
   document.getElementById('tb-entrada').onclick = () => abrirEntrada();
+  document.getElementById('tb-pedido').onclick = () => abrirPedido(ctx);
   document.getElementById('tb-inventario').onclick = () => abrirInventario(ctx);
   document.getElementById('tb-stock').onclick = () => abrirStock(ctx);
   document.getElementById('tb-descuadres').onclick = () => abrirDescuadres(ctx);
