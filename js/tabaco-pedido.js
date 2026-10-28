@@ -1,5 +1,6 @@
 // js/tabaco-pedido.js — recibir un pedido de tabaco contra lo esperado: carga del Excel de compra (TransferScan), ficha del pedido y botón del inicio
-import { openSheet, toast, esc } from './ui.js';
+import { openSheet, closeSheet, openQtySheet, toast, esc } from './ui.js';
+import { beepMatch, beepError } from './camera-scanner.js';
 import { parseFilasPedido, refPedidoDeNombre, etiquetaPedido, nuevoId, fmtFecha, fmtHora, totalLineas } from './tabaco-core.js';
 import { elegirYLeerExcel } from './tabaco-historico.js';   // la librería de Excel (y su lectura) vive en un solo sitio del módulo
 
@@ -41,7 +42,7 @@ function partesAvisos(av) {
 export async function abrirPedido(ctx) {
   const p = ctx.estado.pedido;
   if (!p) return cargarExcelPedido(ctx);
-  if (p.recepcion) return toast('Conteo: siguiente tarea');
+  if (p.recepcion) return contarPedido(ctx);
   fichaPedido(ctx);
 }
 
@@ -58,9 +59,118 @@ function fichaPedido(ctx) {
     <button class="add-btn" id="tb-pd-contar" style="margin-top:12px">Empezar a contar</button>
     <button class="tb-btn" id="tb-pd-cambiar" style="width:100%;margin-top:8px;background:var(--surface2)">Cambiar el Excel</button>
     <button class="tb-danger" id="tb-pd-quitar" style="margin-top:8px">Quitar el pedido</button>`);
-  document.getElementById('tb-pd-contar').onclick = () => { close(); toast('Conteo: siguiente tarea'); };
+  document.getElementById('tb-pd-contar').onclick = () => { close(); contarPedido(ctx); };
   document.getElementById('tb-pd-cambiar').onclick = () => { close(); cargarExcelPedido(ctx); };
   document.getElementById('tb-pd-quitar').onclick = () => { close(); quitarPedido(ctx); };
+}
+
+const cont = () => document.getElementById('main');
+const tiene = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
+
+// Contar el palé contra el pedido. Igual que el inventario: cada lectura SUMA, tocar una línea deja
+// un número exacto, retomar el conteo pide SIEMPRE el PIN y un conteo sin nada leído no se guarda.
+// Es un conteo CIEGO: lo que dice el pedido no se enseña hasta que se lee el artículo (así se
+// cuenta lo que hay, no lo que se espera). Aquí no se registra ningún movimiento: el borrador
+// vive en `estado.pedido.recepcion` hasta que se cierre la recepción.
+async function contarPedido(ctx) {
+  const e = ctx.estado, pedido = e.pedido;
+  if (!pedido) return;
+  const nuevo = quien => ({ personaId: quien.id, personaNombre: quien.nombre, iniciado: new Date().toISOString(), contado: {}, nombres: {}, incidencias: '' });
+  let rec = pedido.recepcion;
+  if (rec) {
+    const quien = await ctx.pedirPin({ titulo: 'Continuar recepción de ' + rec.personaNombre, sub: 'Teclea tu PIN' });
+    if (!quien || !mismoEstado(ctx, e)) return;
+    if (quien.id !== rec.personaId) {   // es otra persona: o descarta lo que contó su compañero, o no sigue
+      if (!confirm(`Este conteo es de ${rec.personaNombre} (${Object.keys(rec.contado).length} artículos contados). ¿Descartarlo y empezar el tuyo?`)) return ctx.refrescar();
+      pedido.recepcion = null; ctx.guardar(e); rec = nuevo(quien);
+    }
+  } else {
+    const quien = await ctx.pedirPin({ titulo: '¿Quién recibe el pedido?' });
+    if (!quien || !mismoEstado(ctx, e)) return;
+    rec = nuevo(quien);
+  }
+  const lineas = pedido.lineas || [];
+  const esperado = new Map(lineas.map(l => [l.ref, l.qty]));
+  const nombre = p => p.name || p.ref;
+  // El borrador solo entra en el estado guardado cuando hay algo contado (y sale si se queda sin nada).
+  const guardaBorrador = () => {
+    if (Object.keys(rec.contado).length) pedido.recepcion = rec;
+    else if (pedido.recepcion === rec) pedido.recepcion = null;
+    ctx.guardar(e);
+  };
+  const apunta = (p, qty) => {
+    rec.contado[p.ref] = qty;
+    rec.nombres[p.ref] = { name: nombre(p), ean: p.ean || '' };
+    guardaBorrador(); pinta();
+  };
+  // Tras cada cambio: pitido doble si cuadra, de error si sobra; lo que falta solo se dice.
+  const aviso = p => {
+    const c = rec.contado[p.ref];
+    if (!esperado.has(p.ref)) return toast(`${nombre(p)}: ${c} (sobrante, no estaba en el pedido)`, 'red');
+    const esp = esperado.get(p.ref);
+    if (c === esp) { beepMatch(); toast(`✓ ${nombre(p)} cuadra con el pedido (${esp})`, 'green'); }
+    else if (c > esp) { beepError(); toast(`${nombre(p)}: ${c} contados, pedido ${esp} (+${c - esp})`, 'red'); }
+    else toast(`${nombre(p)}: ${c} de ${esp}`);
+  };
+  // Una lectura (pistola, cámara o buscador) SUMA lo tecleado. `onDone` (opcional) reanuda la cámara.
+  const contar = (p, onDone) => {
+    if (!p) return;
+    if (!esperado.has(p.ref) && !tiene(rec.contado, p.ref)) {
+      beepError();
+      if (!confirm(`"${nombre(p)}" no está en el pedido. ¿Añadirlo como sobrante?`)) { if (onDone) onDone(); return; }
+    }
+    openQtySheet({ ...p, family: p.family || 'TABACO' }, [1, 5, 10, 20], 'Recibido +{n}', qty => {
+      apunta(p, (rec.contado[p.ref] || 0) + qty); aviso(p);
+      if (onDone) onDone();
+    });
+  };
+  // Tocar una línea deja un número exacto. La hoja de cantidad no confirma 0: va en su propio botón.
+  const fijar = p => {
+    if (!p) return;
+    openQtySheet({ ...p, family: p.family || 'TABACO' }, [1, 5, 10, 20], 'Dejar recibido en ×{n}', qty => { apunta(p, qty); aviso(p); });
+    const add = document.getElementById('np-add');
+    if (add) {
+      const cero = document.createElement('button');
+      cero.className = 'tb-danger'; cero.style.marginTop = '8px'; cero.textContent = 'No vino ninguno (0)';
+      cero.onclick = () => { apunta(p, 0); aviso(p); closeSheet(); };
+      add.insertAdjacentElement('afterend', cero);
+    }
+  };
+  ctx.setOnEan(contar);
+  const salir = () => { ctx.setOnEan(null); ctx.refrescar(); };
+  const fila = (p, m, c, cls) => `<button class="tb-line" data-ref="${esc(p.ref)}" style="width:100%;text-align:left"><div class="tb-n">${esc(nombre(p))}<div class="tb-m">${esc(m)}</div></div><div class="tb-q ${cls}">${c === undefined ? '—' : c}</div></button>`;
+  const pinta = () => {
+    const contado = rec.contado, refs = Object.keys(contado);
+    const sobrantes = refs.filter(r => !esperado.has(r)).map(r => ({ ref: r, name: (rec.nombres[r] && rec.nombres[r].name) || r, ean: (rec.nombres[r] && rec.nombres[r].ean) || '', family: 'TABACO' }));
+    const leidas = lineas.filter(l => tiene(contado, l.ref));
+    const cuadran = leidas.filter(l => contado[l.ref] === l.qty).length;
+    const conDif = leidas.length - cuadran + sobrantes.length, sinContar = lineas.length - leidas.length;
+    const filasPedido = lineas.map(l => {
+      if (!tiene(contado, l.ref)) return fila(l, l.ref, undefined, '');   // a ciegas: aún no se ha leído
+      const c = contado[l.ref];
+      return fila(l, `${l.ref} · pedido ${l.qty} · recibido ${c}`, c, c < l.qty ? 'neg' : c > l.qty ? 'pos' : '');
+    }).join('');
+    cont().innerHTML = `
+      <div class="tb-wrap">
+        <div class="tb-head"><h2>📦 Recepción ${esc(etiquetaPedido(pedido))}</h2><button class="tb-link" id="tb-pd-cancel">Cancelar</button></div>
+        <div class="tb-card"><div class="tb-k">${esc(rec.personaNombre)} · desde ${fmtHora(rec.iniciado)}</div><div class="tb-v">${leidas.length} <small>de ${lineas.length} artículos del pedido contados</small></div><div class="tb-s">Pistolea o usa la cámara 📷. Cada lectura SUMA. Toca una línea para dejar un número exacto (o 0).</div></div>
+        <div class="stock-banner"><span class="stock-banner-item match">✓ ${cuadran} cuadrados</span><span class="stock-banner-sep">·</span><span class="stock-banner-item diff">⚠ ${conDif} con diferencia</span><span class="stock-banner-sep">·</span><span class="stock-banner-item pend">${sinContar} sin contar</span></div>
+        <button class="tb-btn" id="tb-pd-buscar">🔍 Buscar artículo<small>si no lee el código</small></button>
+        <div class="tb-lines">${filasPedido}</div>
+        ${sobrantes.length ? `<div class="tb-pin-sub" style="text-align:left;margin:0 4px">No estaban en el pedido</div>
+        <div class="tb-lines">${sobrantes.map(p => fila(p, `${p.ref} · no estaba en el pedido · recibido ${contado[p.ref]}`, contado[p.ref], 'pos')).join('')}</div>` : ''}
+        <button class="add-btn" id="tb-pd-cerrar" ${refs.length ? '' : 'disabled style="opacity:0.4"'}>Cerrar recepción</button>
+      </div>`;
+    document.getElementById('tb-pd-cancel').onclick = () => {
+      if (refs.length && !confirm('¿Cancelar el conteo? Se pierde lo contado; el pedido sigue cargado.')) return;
+      pedido.recepcion = null; ctx.guardar(e); salir();
+    };
+    document.getElementById('tb-pd-buscar').onclick = () => ctx.buscarArticulo(contar);
+    const porRef = new Map([...lineas, ...sobrantes].map(p => [p.ref, p]));
+    cont().querySelectorAll('.tb-lines [data-ref]').forEach(b => b.onclick = () => fijar(porRef.get(b.dataset.ref)));
+    document.getElementById('tb-pd-cerrar').onclick = () => toast('Cierre: siguiente tarea');
+  };
+  pinta();
 }
 
 // Quitar el pedido no registra nada: solo deja de esperarse (PIN admin + confirmación).
