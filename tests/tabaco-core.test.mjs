@@ -1,7 +1,7 @@
 // node --test tests/tabaco-core.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { esTabaco, nuevoEstado, canonical, hashPin, nuevoSalt, crearMovimiento, verificarCadena, calcularStock, diferenciasInventario, descuadres, valesPendientes, siguienteVale, parseFilasStock, filasExcelHistorico, filasExcelRegularizacion, resumenDia, nombreArchivo, infoRefs, pinValido, estadoMov, recepcionActiva, parseFilasPedido, refPedidoDeNombre, etiquetaPedido } from '../js/tabaco-core.js';
+import { esTabaco, nuevoEstado, canonical, hashPin, nuevoSalt, crearMovimiento, verificarCadena, calcularStock, diferenciasInventario, descuadres, valesPendientes, siguienteVale, parseFilasStock, filasExcelHistorico, filasExcelRegularizacion, resumenDia, nombreArchivo, infoRefs, pinValido, estadoMov, recepcionActiva, parseFilasPedido, refPedidoDeNombre, etiquetaPedido, diferenciasPedido, resumenRecepcion, fmtHora, detalleMov } from '../js/tabaco-core.js';
 
 const ANA = { id: 'p_ana', nombre: 'Ana' }, LUIS = { id: 'p_luis', nombre: 'Luis' };
 const L = (ref, qty, name = ref, ean = '') => ({ ref, qty, name, ean });
@@ -219,4 +219,53 @@ test('refPedidoDeNombre y etiquetaPedido: nombre de TransferScan y nombre cualqu
   assert.deepEqual(refPedidoDeNombre('pedido raro.xlsx'), { proveedor: '', factura: '', arc: '' });
   assert.equal(etiquetaPedido({ archivo: 'COMPRA_CISA_FT2026-123_ARC-00005678.xlsx', factura: '2026-123' }), 'FT 2026-123');
   assert.equal(etiquetaPedido({ archivo: 'pedido raro.xlsx', factura: '' }), 'pedido raro.xlsx');
+});
+
+test('diferenciasPedido: faltas (incluido lo no contado), sobras, sobrante no pedido y cuadrados, en ese orden', () => {
+  const esperado = [L('A', 40, 'Art A'), L('B', 12, 'Art B'), L('C', 5, 'Art C')];
+  const d = diferenciasPedido(esperado, { A: 40, B: 16, D: 2 }, { D: { name: 'Art D', ean: '1' } });
+  assert.deepEqual(d, [
+    { ref: 'C', name: 'Art C', ean: '', esperado: 5, recibido: 0, dif: -5, sinContar: true },
+    { ref: 'B', name: 'Art B', ean: '', esperado: 12, recibido: 16, dif: 4, sinContar: false },
+    { ref: 'D', name: 'Art D', ean: '1', esperado: 0, recibido: 2, dif: 2, sinContar: false },
+    { ref: 'A', name: 'Art A', ean: '', esperado: 40, recibido: 40, dif: 0, sinContar: false }]);
+  assert.deepEqual(diferenciasPedido(esperado, { A: 40, B: 12, C: 5 }).filter(x => x.dif), []);
+});
+
+test('entrada con pedido: descuadres tipo «pedido» con la factura (o el archivo), detalleMov, Excel de regularización y stock', async () => {
+  const PED = { id: 'pd_1', archivo: 'COMPRA_CISA_FT2026-123_ARC-00005678.xlsx', proveedor: 'CISA', factura: '2026-123', arc: '00005678', cargado: '2026-10-28T10:12:00.000Z', nArticulos: 3, esperadoTotal: 57, recibidoTotal: 58 };
+  const DIFS = [{ ref: 'C', name: 'Art C', ean: '', esperado: 5, recibido: 0, dif: -5, sinContar: true }, { ref: 'B', name: 'Art B', ean: '', esperado: 12, recibido: 16, dif: 4, sinContar: false }];
+  const e = await estadoCon(
+    { tipo: 'entrada', persona: ANA, lineas: [L('A', 40, 'Art A'), L('B', 16, 'Art B'), L('D', 2, 'Art D')], nota: '1 cartón golpeado',
+      extra: { motivo: 'Llegada CISA', pedido: PED, esperado: [{ ref: 'A', qty: 40 }, { ref: 'B', qty: 12 }, { ref: 'C', qty: 5 }], diferencias: DIFS } },
+    { tipo: 'entrada', persona: ANA, lineas: [L('A', 1, 'Art A')],
+      extra: { motivo: 'Llegada CISA', pedido: { ...PED, id: 'pd_2', archivo: 'pedido raro.xlsx', proveedor: '', factura: '', arc: '', nArticulos: 1, esperadoTotal: 2, recibidoTotal: 1 }, esperado: [{ ref: 'A', qty: 2 }], diferencias: [{ ref: 'A', name: 'Art A', ean: '', esperado: 2, recibido: 1, dif: -1, sinContar: false }] } });
+  const d = descuadres(e.movs);
+  assert.deepEqual(d.map(x => [x.tipo, x.ref, x.dif, x.vale, x.estado]), [['pedido', 'C', -5, 'FT 2026-123', 'pendiente'], ['pedido', 'B', 4, 'FT 2026-123', 'pendiente'], ['pedido', 'A', -1, 'pedido raro.xlsx', 'pendiente']]);
+  assert.equal(detalleMov(e.movs[0]), 'Llegada CISA · pedido FT 2026-123 · 58 de 57');
+  assert.equal(detalleMov(e.movs[1]), 'Llegada CISA · pedido pedido raro.xlsx · 1 de 2');
+  assert.deepEqual(filasExcelRegularizacion(d)[1].slice(0, 5), ['C', 'Art C', '', -5, 'pedido']);
+  assert.deepEqual(e.stock, { A: 41, B: 16, D: 2 });
+});
+
+test('resumenRecepcion: todo correcto, y con faltas, sobras e incidencias', async () => {
+  const base = { id: 'pd_1', archivo: 'COMPRA_CISA_FT2026-123_ARC-00005678.xlsx', proveedor: 'CISA', factura: '2026-123', arc: '00005678', cargado: '2026-10-28T10:12:00.000Z', nArticulos: 3 };
+  const ok = await crearMovimiento(nuevoEstado('E', { salt: 'x', hash: 'y' }), { tipo: 'entrada', persona: ANA, lineas: [L('A', 40, 'Art A')], ts: '2026-10-30T10:40:00.000Z',
+    extra: { motivo: 'Llegada CISA', pedido: { ...base, nArticulos: 1, esperadoTotal: 40, recibidoTotal: 40 }, esperado: [{ ref: 'A', qty: 40 }], diferencias: [] } });
+  const t1 = resumenRecepcion(ok).split('\n');
+  assert.equal(t1[0], '📦 Recepción pedido CISA · FT 2026-123 · ARC …5678');
+  assert.equal(t1[1], 'Terminal E · 30/10/2026 ' + fmtHora(ok.ts) + ' · Ana');
+  assert.equal(t1[2], '✅ Llegó todo · 1 artículo · 40 uds');
+  assert.match(t1[3], /^Registro #1 · [0-9a-f]{10}$/);
+  assert.equal(t1.length, 4);
+  const mal = await crearMovimiento(nuevoEstado('E', { salt: 'x', hash: 'y' }), { tipo: 'entrada', persona: ANA, lineas: [L('A', 40, 'Art A'), L('B', 16, 'Art B')], nota: '1 cartón golpeado',
+    extra: { motivo: 'Llegada CISA', pedido: { ...base, esperadoTotal: 57, recibidoTotal: 56 }, esperado: [{ ref: 'A', qty: 40 }, { ref: 'B', qty: 12 }, { ref: 'C', qty: 5 }],
+      diferencias: [{ ref: 'C', name: 'Art C', ean: '', esperado: 5, recibido: 0, dif: -5, sinContar: true }, { ref: 'B', name: 'Art B', ean: '', esperado: 12, recibido: 16, dif: 4, sinContar: false }] } });
+  const t2 = resumenRecepcion(mal);
+  assert.match(t2, /\n⚠ Faltan:\n• Art C \(C\): pedido 5, recibido 0 \(-5\) · sin contar\n/);
+  assert.match(t2, /\nSobran:\n• Art B \(B\): pedido 12, recibido 16 \(\+4\)\n/);
+  assert.match(t2, /\nIncidencias: 1 cartón golpeado\nRecibido: 56 de 57 uds · 3 artículos\nRegistro #1 · [0-9a-f]{10}$/);
+  const sinArc = await crearMovimiento(nuevoEstado('E', { salt: 'x', hash: 'y' }), { tipo: 'entrada', persona: ANA, lineas: [L('A', 2, 'Art A')],
+    extra: { motivo: 'Llegada CISA', pedido: { ...base, proveedor: '', factura: '', arc: '', archivo: 'pedido raro.xlsx', nArticulos: 1, esperadoTotal: 2, recibidoTotal: 2 }, esperado: [{ ref: 'A', qty: 2 }], diferencias: [] } });
+  assert.equal(resumenRecepcion(sinArc).split('\n')[0], '📦 Recepción pedido · pedido raro.xlsx');
 });

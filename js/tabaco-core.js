@@ -110,6 +110,18 @@ export function diferenciasInventario(stock, contado, completo, info = {}) {
   }
   return out.sort((a, b) => a.ref.localeCompare(b.ref));
 }
+// Pedido esperado contra lo contado al recibir: primero lo que falta (lo no contado cuenta como 0), luego lo que sobra, luego lo cuadrado.
+export function diferenciasPedido(esperado, contado, info = {}) {
+  const pedido = new Map((esperado || []).map(l => [l.ref, l]));
+  const out = [];
+  for (const ref of new Set([...pedido.keys(), ...Object.keys(contado || {})])) {
+    const l = pedido.get(ref), src = l || info[ref] || {}, esp = l ? l.qty : 0;
+    const recibido = Math.max(0, Math.trunc(Number((contado || {})[ref] ?? 0)));
+    out.push({ ref, name: src.name || '', ean: src.ean || '', esperado: esp, recibido, dif: recibido - esp, sinContar: !!l && !Object.hasOwn(contado || {}, ref) });
+  }
+  const grupo = d => d.dif < 0 ? 0 : d.dif > 0 ? 1 : 2;
+  return out.sort((a, b) => grupo(a) - grupo(b) || (grupo(a) === 0 ? a.dif - b.dif : grupo(a) === 1 ? b.dif - a.dif : a.ref.localeCompare(b.ref)));
+}
 
 export function anulados(movs) { const s = new Set(); for (const m of movs) if (m.tipo === 'anulacion') s.add((m.extra || {}).anulaId); return s; }
 
@@ -128,8 +140,9 @@ export function descuadres(movs) {
     for (const d of (m.extra || {}).diferencias || []) {
       if (!d.dif) continue;
       const id = m.id + ':' + d.ref, r = reg.get(id);
-      out.push({ id, movId: m.id, seq: m.seq, ts: m.ts, tipo: m.tipo === 'recepcion' ? 'transito' : 'inventario', ref: d.ref, name: d.name || '', ean: d.ean || '',
-        dif: d.dif, persona: m.persona.nombre, vale: (m.extra || {}).vale || '', estado: r ? 'regularizado' : 'pendiente', regularizadoTs: r ? r.ts : null, barco: r ? (r.extra.barco || '') : '' });
+      const ped = m.tipo === 'entrada' && (m.extra || {}).pedido;
+      out.push({ id, movId: m.id, seq: m.seq, ts: m.ts, tipo: ped ? 'pedido' : m.tipo === 'recepcion' ? 'transito' : 'inventario', ref: d.ref, name: d.name || '', ean: d.ean || '',
+        dif: d.dif, persona: m.persona.nombre, vale: ped ? etiquetaPedido(ped) : (m.extra || {}).vale || '', estado: r ? 'regularizado' : 'pendiente', regularizadoTs: r ? r.ts : null, barco: r ? (r.extra.barco || '') : '' });
     }
   }
   return out;
@@ -208,7 +221,7 @@ export function detalleMov(m) {
   switch (m.tipo) {
     case 'inventario': return (e.completo ? 'completo' : 'parcial') + (e.origen === 'excel' ? ' · Excel ' + (e.archivo || '') : '');
     case 'recepcion': return 'recibe ' + (e.vale || '') + (e.mismaPersona ? ' · MISMA PERSONA QUE SACÓ' : '');
-    case 'entrada': return e.motivo || '';
+    case 'entrada': return e.pedido ? `${e.motivo} · pedido ${etiquetaPedido(e.pedido)} · ${e.pedido.recibidoTotal} de ${e.pedido.esperadoTotal}` : e.motivo || '';
     case 'anulacion': return 'anula #' + e.anulaSeq + (e.motivo ? ': ' + e.motivo : '');
     case 'regularizacion': return (e.descuadreIds || []).length + ' descuadres · barco ' + (e.barco || '—');
     default: return e.destino ? 'a ' + e.destino : '';
@@ -222,6 +235,25 @@ export function estadoMov(m, movs) {
   if (m.tipo === 'salida') return (m.extra || {}).sinRecepcion ? 'entregada' : movs.some(x => x.tipo === 'recepcion' && (x.extra || {}).valeId === m.id) ? 'recibido' : 'en camino';
   if (m.tipo === 'recepcion') return (m.extra || {}).mismaPersona ? 'recibido · misma persona' : 'recibido';
   return '';
+}
+
+// Texto de la recepción de un pedido (hoja «✅ Recepción registrada» y el texto que se comparte).
+export function resumenRecepcion(m) {
+  const e = m.extra || {}, p = e.pedido || {}, difs = e.diferencias || [];
+  const arts = n => n + (n === 1 ? ' artículo' : ' artículos');
+  const vineta = d => `• ${d.name} (${d.ref}): pedido ${d.esperado}, recibido ${d.recibido} (${d.dif > 0 ? '+' : ''}${d.dif})` + (d.sinContar ? ' · sin contar' : '');
+  const lineas = ['📦 Recepción pedido' + (p.proveedor ? ' ' + p.proveedor : '') + ' · ' + etiquetaPedido(p) + (p.arc ? ' · ARC …' + String(p.arc).slice(-4) : ''),
+    `Terminal ${m.terminal} · ${fmtFecha(m.ts)} ${fmtHora(m.ts)} · ${m.persona.nombre}`];
+  if (!difs.length) lineas.push(`✅ Llegó todo · ${arts(p.nArticulos)} · ${p.recibidoTotal} uds`);
+  else {
+    const faltan = difs.filter(d => d.dif < 0), sobran = difs.filter(d => d.dif > 0);
+    if (faltan.length) lineas.push('⚠ Faltan:', ...faltan.map(vineta));
+    if (sobran.length) lineas.push('Sobran:', ...sobran.map(vineta));
+    if (m.nota) lineas.push('Incidencias: ' + m.nota);
+    lineas.push(`Recibido: ${p.recibidoTotal} de ${p.esperadoTotal} uds · ${arts(p.nArticulos)}`);
+  }
+  lineas.push(`Registro #${m.seq} · ${m.hash.slice(0, 10)}`);
+  return lineas.join('\n');
 }
 
 export function filasExcelHistorico(movs, integridad) {
