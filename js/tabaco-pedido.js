@@ -1,8 +1,9 @@
 // js/tabaco-pedido.js — recibir un pedido de tabaco contra lo esperado: carga del Excel de compra (TransferScan), ficha del pedido y botón del inicio
 import { openSheet, closeSheet, openQtySheet, toast, esc } from './ui.js';
+import { registrar } from './tabaco-store.js';
 import { beepMatch, beepError } from './camera-scanner.js';
-import { parseFilasPedido, refPedidoDeNombre, etiquetaPedido, nuevoId, fmtFecha, fmtHora, totalLineas } from './tabaco-core.js';
-import { elegirYLeerExcel } from './tabaco-historico.js';   // la librería de Excel (y su lectura) vive en un solo sitio del módulo
+import { parseFilasPedido, refPedidoDeNombre, etiquetaPedido, nuevoId, fmtFecha, fmtHora, totalLineas, diferenciasPedido, resumenRecepcion } from './tabaco-core.js';
+import { elegirYLeerExcel, compartirTexto } from './tabaco-historico.js';   // la librería de Excel (y su lectura) vive en un solo sitio del módulo
 
 // Mientras se teclea el PIN (o se elige el archivo) otra ventana puede haber cambiado el registro
 // y `mount()` habrá cargado un estado nuevo: entonces no se sigue con el de antes.
@@ -168,9 +169,77 @@ async function contarPedido(ctx) {
     document.getElementById('tb-pd-buscar').onclick = () => ctx.buscarArticulo(contar);
     const porRef = new Map([...lineas, ...sobrantes].map(p => [p.ref, p]));
     cont().querySelectorAll('.tb-lines [data-ref]').forEach(b => b.onclick = () => fijar(porRef.get(b.dataset.ref)));
-    document.getElementById('tb-pd-cerrar').onclick = () => toast('Cierre: siguiente tarea');
+    document.getElementById('tb-pd-cerrar').onclick = () => { if (refs.length) cerrarRecepcion(ctx, e, rec, guardaBorrador); };
   };
   pinta();
+}
+
+// Cerrar la recepción: lo que falta, lo que sobra y lo que no se contó (cuenta como NO recibido),
+// con las incidencias para CISA. Al confirmar se registra UNA entrada con lo recibido de verdad;
+// cada diferencia queda como descuadre «pedido» para regularizar. Después el pedido deja de esperarse.
+function cerrarRecepcion(ctx, e, rec, guardaBorrador) {
+  const pedido = e.pedido;
+  if (!pedido) return;
+  const lineas = pedido.lineas || [];
+  const difs = diferenciasPedido(lineas, rec.contado, { ...ctx.info(), ...rec.nombres });
+  const conDif = difs.filter(d => d.dif !== 0);
+  const faltan = difs.filter(d => d.dif < 0 && !d.sinContar), sobran = difs.filter(d => d.dif > 0), sinContar = difs.filter(d => d.sinContar);
+  const esperadoTotal = totalLineas(lineas), recibidoTotal = difs.reduce((a, d) => a + d.recibido, 0);
+  const n = lineas.length;
+  const sub = conDif.length
+    ? '⚠ ' + [faltan.length ? `${faltan.length} ${faltan.length === 1 ? 'falta' : 'faltas'}` : '',
+        sobran.length ? `${sobran.length} ${sobran.length === 1 ? 'sobra' : 'sobran'}` : '',
+        sinContar.length ? `${sinContar.length} sin contar` : ''].filter(Boolean).join(' · ')
+    : `✅ Llegó todo · ${n} artículo${n === 1 ? '' : 's'} · ${recibidoTotal} uds`;
+  const ROT = 'text-align:left;margin:10px 4px 4px';
+  const filaDif = d => `<div class="tb-line"><div class="tb-n">${esc(d.name || d.ref)}<div class="tb-m">${esc(d.ref)} · pedido ${d.esperado} → recibido ${d.recibido}</div></div><div class="tb-q ${d.dif < 0 ? 'neg' : 'pos'}">${d.dif > 0 ? '+' : ''}${d.dif}</div></div>`;
+  const bloque = (titulo, filas) => filas.length ? `<div class="tb-pin-sub" style="${ROT}">${esc(titulo)}</div><div class="tb-lines">${filas.map(filaDif).join('')}</div>` : '';
+  let enviando = false;
+  openSheet(`
+    <div class="tb-pin-title">Cerrar recepción</div>
+    <div class="tb-pin-sub">${esc(sub)}</div>
+    <div style="max-height:45vh;overflow:auto">${bloque('Faltan', faltan)}${bloque('Sobran', sobran)}${bloque('Sin contar: se dan por NO recibidos', sinContar)}</div>
+    <textarea class="tb-input" id="tb-pd-inc" rows="2" placeholder="Incidencias para CISA (golpeados, mal estado, bultos…)" style="margin-top:10px">${esc(rec.incidencias || '')}</textarea>
+    <button class="add-btn" id="tb-pd-conf" style="margin-top:10px">Confirmar entrada (${recibidoTotal} uds)</button>`);
+  if (!conDif.length) beepMatch();
+  document.getElementById('tb-pd-inc').addEventListener('input', ev => { rec.incidencias = ev.target.value; guardaBorrador(); });
+  document.getElementById('tb-pd-conf').onclick = async () => {
+    if (enviando) return;
+    if (!mismoEstado(ctx, e)) return;
+    enviando = true;
+    try {
+      const mov = await registrar(e, {
+        tipo: 'entrada',
+        persona: { id: rec.personaId, nombre: rec.personaNombre },
+        lineas: difs.filter(d => d.recibido > 0).map(d => ({ ref: d.ref, name: d.name, ean: d.ean, qty: d.recibido })),
+        nota: (rec.incidencias || '').trim(),
+        extra: {
+          motivo: 'Llegada CISA',
+          pedido: { id: pedido.id, archivo: pedido.archivo, proveedor: pedido.proveedor, factura: pedido.factura, arc: pedido.arc, cargado: pedido.cargado, nArticulos: n, esperadoTotal, recibidoTotal },
+          esperado: lineas.map(l => ({ ref: l.ref, qty: l.qty })),
+          diferencias: conDif,
+        },
+      });
+      e.pedido = null; ctx.guardar(e); ctx.setOnEan(null);
+      closeSheet();
+      const k = conDif.length;
+      toast(k ? `Recepción registrada: ${k} diferencia${k === 1 ? '' : 's'} apuntada${k === 1 ? '' : 's'} como descuadre` : 'Recepción registrada: llegó todo', k ? 'red' : 'green', 3500);
+      mostrarResumen(ctx, mov);
+    } catch (err) {
+      toast('No se pudo registrar: ' + ((err && err.message) || err), 'red', 4000);
+    } finally { enviando = false; }
+  };
+}
+
+// El resguardo de la recepción (mismo estilo que el vale de una salida): para compartir con CISA / Jose.
+function mostrarResumen(ctx, mov) {
+  const t = resumenRecepcion(mov);
+  openSheet(`<div class="tb-pin-title">✅ Recepción registrada</div>
+    <pre style="white-space:pre-wrap;font:inherit;font-size:0.82rem;background:var(--surface2);border-radius:12px;padding:12px;margin:10px 0">${esc(t)}</pre>
+    <button class="add-btn" id="tb-share">📤 Compartir</button>
+    <button class="tb-link" id="tb-ok" style="width:100%;margin-top:6px">Cerrar</button>`, () => ctx.refrescar());
+  document.getElementById('tb-share').onclick = () => compartirTexto(t, 'Recepción de pedido');
+  document.getElementById('tb-ok').onclick = () => closeSheet();
 }
 
 // Quitar el pedido no registra nada: solo deja de esperarse (PIN admin + confirmación).

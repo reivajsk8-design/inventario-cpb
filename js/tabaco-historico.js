@@ -142,7 +142,7 @@ export function abrirDescuadres(ctx) {
   const sel = new Set();
   const todos = () => descuadres(ctx.estado.movs);
 
-  const meta = d => `${esc(d.ref)} · ${d.tipo === 'transito' ? 'tránsito' : 'inventario'} · ${fmtFecha(d.ts)} · ${esc(d.persona)}${d.vale ? ' · ' + esc(d.vale) : ''}`;
+  const meta = d => `${esc(d.ref)} · ${d.tipo === 'transito' ? 'tránsito' : d.tipo === 'pedido' ? 'pedido' : 'inventario'} · ${fmtFecha(d.ts)} · ${esc(d.persona)}${d.vale ? ' · ' + esc(d.vale) : ''}`;
   const dif = d => `<div class="tb-q ${d.dif < 0 ? 'neg' : 'pos'}">${d.dif > 0 ? '+' : ''}${d.dif}</div>`;
   const filaPend = d => `<div class="tb-line"><input type="checkbox" data-sel="${esc(d.id)}" ${sel.has(d.id) ? 'checked' : ''} style="width:20px;height:20px;flex:none;accent-color:var(--accent)"><div class="tb-n">${esc(d.name || d.ref)}<div class="tb-m">${meta(d)}</div></div>${dif(d)}</div>`;
   const filaReg = d => `<div class="tb-line"><div class="tb-n">${esc(d.name || d.ref)}<div class="tb-m">${meta(d)} · ajustado ${fmtFecha(d.regularizadoTs)} · barco ${esc(d.barco || '—')}</div></div>${dif(d)}</div>`;
@@ -291,6 +291,7 @@ export function abrirHistorico(ctx) {
           : (an.has(m.id) ? '' : '<div class="tb-s">⏳ En camino: nadie lo ha recibido todavía en tienda</div>')) : ''}
         ${m.nota ? `<div class="tb-s">Nota: ${esc(m.nota)}</div>` : ''}
         ${detalleMov(m) ? `<div class="tb-s">${esc(detalleMov(m))}</div>` : ''}
+        ${((m.extra || {}).diferencias || []).some(d => d.dif) ? `<div class="tb-s">Diferencias: ${m.extra.diferencias.filter(d => d.dif).map(d => `${esc(d.name || d.ref)} (${d.dif > 0 ? '+' : ''}${d.dif})`).join(' · ')}</div>` : ''}
         <div class="tb-s">Registro #${m.seq} · ${esc((m.hash || '').slice(0, 10))}</div>
       </div>
       ${anulable ? '<button class="tb-danger" id="tb-anular" style="margin-top:10px">Anular (admin)</button>'
