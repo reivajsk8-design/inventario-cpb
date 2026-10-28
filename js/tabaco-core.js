@@ -117,7 +117,7 @@ export function diferenciasPedido(esperado, contado, info = {}) {
   for (const ref of new Set([...pedido.keys(), ...Object.keys(contado || {})])) {
     const l = pedido.get(ref), src = l || info[ref] || {}, esp = l ? l.qty : 0;
     const recibido = Math.max(0, Math.trunc(Number((contado || {})[ref] ?? 0)));
-    out.push({ ref, name: src.name || '', ean: src.ean || '', esperado: esp, recibido, dif: recibido - esp, sinContar: !!l && !Object.hasOwn(contado || {}, ref) });
+    out.push({ ref, name: src.name || '', ean: src.ean || '', esperado: esp, recibido, dif: recibido - esp, sinContar: !!l && !Object.prototype.hasOwnProperty.call(contado || {}, ref) });
   }
   const grupo = d => d.dif < 0 ? 0 : d.dif > 0 ? 1 : 2;
   return out.sort((a, b) => grupo(a) - grupo(b) || (grupo(a) === 0 ? a.dif - b.dif : grupo(a) === 1 ? b.dif - a.dif : a.ref.localeCompare(b.ref)));
@@ -132,11 +132,13 @@ export function valesPendientes(movs, ahora = Date.now(), horasAviso = 2) {
 }
 export function siguienteVale(movs) { return 'V-' + String(movs.filter(m => m.tipo === 'salida').length + 1).padStart(4, '0'); }
 
+// Un movimiento anulado (p. ej. la entrada de un pedido equivocado) ya no deja descuadres pendientes.
 export function descuadres(movs) {
-  const reg = new Map();
+  const reg = new Map(), an = anulados(movs);
   for (const m of movs) if (m.tipo === 'regularizacion') for (const id of (m.extra || {}).descuadreIds || []) reg.set(id, m);
   const out = [];
   for (const m of movs) {
+    if (an.has(m.id)) continue;
     for (const d of (m.extra || {}).diferencias || []) {
       if (!d.dif) continue;
       const id = m.id + ':' + d.ref, r = reg.get(id);
@@ -176,7 +178,8 @@ export function parseFilasStock(rows) {
 
 // Pedido esperado: el Excel de compra de TransferScan (también sirve Conteos o Proxium). Las filas del
 // mismo código se suman (dobles partidos, varias partidas); las que no traen código (artículo aún sin
-// alta en Proxium) se cuentan en sinCodigo y no se cargan. La columna se elige por prioridad de alias.
+// alta en Proxium) se cuentan en sinCodigo (y su descripción y cantidad en sinCodigoFilas, para poder
+// decir cuáles son) y no se cargan. La columna se elige por prioridad de alias.
 export function parseFilasPedido(rows) {
   const norm = v => String(v ?? '').trim(), low = v => norm(v).toLowerCase();
   const REF = ['código proxium', 'codigo proxium', 'ref', 'artículo', 'articulo', 'código', 'codigo'], QTY = ['unidades', 'almacén', 'almacen', 'cantidad', 'stock', 'disponible'], NOM = ['descripción', 'descripcion', 'nombre'];
@@ -187,23 +190,26 @@ export function parseFilasPedido(rows) {
     const iNom = col(h, NOM), iEan = h.indexOf('ean');
     const porRef = new Map();
     let sinCodigo = 0, saltadas = 0;
+    const sinCodigoFilas = [];
     for (const r of rows.slice(i + 1)) {
       const f = r || [], ref = norm(f[iRef]), cruda = norm(f[iQty]);
       const q = cruda === '' ? NaN : Math.trunc(Number(cruda.replace(',', '.'))), vale = Number.isFinite(q) && q > 0;
-      if (!ref) { if (vale) sinCodigo++; continue; }
+      if (!ref) { if (vale) { sinCodigo++; sinCodigoFilas.push({ name: iNom >= 0 ? norm(f[iNom]) : '', qty: q }); } continue; }
       if (!vale) { saltadas++; continue; }
       const name = iNom >= 0 ? norm(f[iNom]) : '', ean = iEan >= 0 ? norm(f[iEan]) : '';
       const l = porRef.get(ref);
       if (!l) { porRef.set(ref, { ref, name, ean, qty: q }); continue; }
       l.qty += q; if (!l.name) l.name = name; if (!l.ean) l.ean = ean;
     }
-    return { lineas: [...porRef.values()], sinCodigo, saltadas, cabecera: i + 1 };
+    return { lineas: [...porRef.values()], sinCodigo, sinCodigoFilas, saltadas, cabecera: i + 1 };
   }
   throw new Error('No encontré la cabecera: espero "Código Proxium + Unidades" (TransferScan), "REF + Almacén" (Conteos) o "Artículo + Cantidad" (Proxium)');
 }
 // Proveedor, factura y ARC desde el nombre que pone TransferScan: COMPRA_<prov>_FT<factura>_ARC-<arc>.xlsx
+// El ARC acaba en el primer espacio, paréntesis o punto: se tolera el « (3)» que añade el navegador
+// (Gmail/Android) a la segunda descarga del mismo archivo.
 export function refPedidoDeNombre(nombre) {
-  const m = /^COMPRA_([^_]+)_FT(.+?)_ARC-([^.]+)\.xlsx?$/i.exec(String(nombre ?? ''));
+  const m = /^COMPRA_([^_]+)_FT(.+?)_ARC-([^.\s()]+)(?:\s*\(\d+\))?\.xlsx?$/i.exec(String(nombre ?? ''));
   return m ? { proveedor: m[1], factura: m[2], arc: m[3] } : { proveedor: '', factura: '', arc: '' };
 }
 // Cómo se nombra un pedido en pantalla y en el Excel: por su factura si la hay; si no, por el archivo.
@@ -249,9 +255,9 @@ export function resumenRecepcion(m) {
     const faltan = difs.filter(d => d.dif < 0), sobran = difs.filter(d => d.dif > 0);
     if (faltan.length) lineas.push('⚠ Faltan:', ...faltan.map(vineta));
     if (sobran.length) lineas.push('Sobran:', ...sobran.map(vineta));
-    if (m.nota) lineas.push('Incidencias: ' + m.nota);
-    lineas.push(`Recibido: ${p.recibidoTotal} de ${p.esperadoTotal} uds · ${arts(p.nArticulos)}`);
   }
+  if (m.nota) lineas.push('Incidencias: ' + m.nota);   // también cuando llegó todo (golpeados, bultos abiertos…)
+  if (difs.length) lineas.push(`Recibido: ${p.recibidoTotal} de ${p.esperadoTotal} uds · ${arts(p.nArticulos)}`);
   lineas.push(`Registro #${m.seq} · ${m.hash.slice(0, 10)}`);
   return lineas.join('\n');
 }

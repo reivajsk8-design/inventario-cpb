@@ -13,6 +13,8 @@ const mismoEstado = (ctx, e) => {
   return false;
 };
 
+const arts = n => n + (n === 1 ? ' artículo' : ' artículos');
+
 // Texto del botón «📦 …» del inicio (y la línea de aviso cuando hay un pedido esperando el palé).
 export function textoBotonPedido(estado) {
   const p = estado && estado.pedido;
@@ -23,15 +25,19 @@ export function textoBotonPedido(estado) {
     const n = lineas.filter(l => Object.prototype.hasOwnProperty.call(contado, l.ref)).length;
     return { titulo: `Continuar recepción (${n} de ${lineas.length} contados)`, sub: `${et} · conteo de ${p.recepcion.personaNombre || ''}`, aviso: '' };
   }
-  return { titulo: 'Recibir pedido', sub: `${et} · ${lineas.length} artículos · ${totalLineas(lineas)} uds · esperando el palé`,
+  return { titulo: 'Recibir pedido', sub: `${et} · ${arts(lineas.length)} · ${totalLineas(lineas)} uds · esperando el palé`,
     aviso: `📦 Pedido ${et} cargado el ${fmtFecha(p.cargado)}, pendiente de recibir` };
 }
 
 // Lo que se quedó fuera al cargar el Excel (para el toast y para volver a verlo en la ficha).
+// Las filas sin código se nombran (máx. 3): es lo que vendrá en el palé y no se podrá pistolear.
 function partesAvisos(av) {
-  const a = av || {}, out = [], desc = a.desconocidas || [];
+  const a = av || {}, out = [], desc = a.desconocidas || [], filas = a.sinCodigoFilas || [];
   let k = a.sinCodigo || 0;
-  if (k > 0) out.push(`${k} ${k === 1 ? 'fila' : 'filas'} sin código Proxium (no ${k === 1 ? 'cargada' : 'cargadas'})`);
+  if (k > 0) out.push(`${k} ${k === 1 ? 'fila' : 'filas'} sin código Proxium (no ${k === 1 ? 'cargada' : 'cargadas'})`
+    + (filas.length ? ': ' + filas.slice(0, 3).map(f => `${f.name || '(sin descripción)'} ×${f.qty}`).join(', ') + (filas.length > 3 ? '…' : '') : ''));
+  k = a.saltadas || 0;
+  if (k > 0) out.push(`${k} ${k === 1 ? 'fila' : 'filas'} sin cantidad válida (no ${k === 1 ? 'cargada' : 'cargadas'})`);
   k = a.noTabaco || 0;
   if (k > 0) out.push(`${k} ${k === 1 ? 'ignorada' : 'ignoradas'} por no ser tabaco`);
   k = desc.length;
@@ -55,8 +61,9 @@ function fichaPedido(ctx) {
   const avisos = partesAvisos(p.avisos);
   const close = openSheet(`
     <div class="tb-pin-title">${esc(titulo)}</div>
-    <div class="tb-pin-sub">Cargado el ${fmtFecha(p.cargado)} ${fmtHora(p.cargado)} · ${lineas.length} artículos · ${totalLineas(lineas)} uds</div>
+    <div class="tb-pin-sub">Cargado el ${fmtFecha(p.cargado)} ${fmtHora(p.cargado)} · ${arts(lineas.length)} · ${totalLineas(lineas)} uds</div>
     ${avisos.length ? `<div class="tb-alert" style="margin-top:10px">⚠ Al cargar: ${esc(avisos.join(' · '))}</div>` : ''}
+    ${(p.avisos && p.avisos.sinCodigo) ? '<div class="tb-s" style="margin-top:6px">Lo que venga sin código no se puede pistolear: apúntalo en «Incidencias para CISA», dalo de alta en Proxium y hazlo entrar con «Entrada al almacén».</div>' : ''}
     <button class="add-btn" id="tb-pd-contar" style="margin-top:12px">Empezar a contar</button>
     <button class="tb-btn" id="tb-pd-cambiar" style="width:100%;margin-top:8px;background:var(--surface2)">Cambiar el Excel</button>
     <button class="tb-danger" id="tb-pd-quitar" style="margin-top:8px">Quitar el pedido</button>`);
@@ -146,6 +153,7 @@ async function contarPedido(ctx) {
     const leidas = lineas.filter(l => tiene(contado, l.ref));
     const cuadran = leidas.filter(l => contado[l.ref] === l.qty).length;
     const conDif = leidas.length - cuadran + sobrantes.length, sinContar = lineas.length - leidas.length;
+    const uds = refs.reduce((a, r) => a + (Number(contado[r]) || 0), 0);
     const filasPedido = lineas.map(l => {
       if (!tiene(contado, l.ref)) return fila(l, l.ref, undefined, '');   // a ciegas: aún no se ha leído
       const c = contado[l.ref];
@@ -154,7 +162,7 @@ async function contarPedido(ctx) {
     cont().innerHTML = `
       <div class="tb-wrap">
         <div class="tb-head"><h2>📦 Recepción ${esc(etiquetaPedido(pedido))}</h2><button class="tb-link" id="tb-pd-cancel">Cancelar</button></div>
-        <div class="tb-card"><div class="tb-k">${esc(rec.personaNombre)} · desde ${fmtHora(rec.iniciado)}</div><div class="tb-v">${leidas.length} <small>de ${lineas.length} artículos del pedido contados</small></div><div class="tb-s">Pistolea o usa la cámara 📷. Cada lectura SUMA. Toca una línea para dejar un número exacto (o 0).</div></div>
+        <div class="tb-card"><div class="tb-k">${esc(rec.personaNombre)} · desde ${fmtHora(rec.iniciado)}</div><div class="tb-v">${leidas.length} <small>de ${lineas.length} artículos del pedido contados · ${uds} uds</small></div><div class="tb-s">Pistolea o usa la cámara 📷. Cada lectura SUMA. Toca una línea para dejar un número exacto (o 0). Los cartones golpeados o en mal estado NO se cuentan: apúntalos en Incidencias al cerrar.</div></div>
         <div class="stock-banner"><span class="stock-banner-item match">✓ ${cuadran} cuadrados</span><span class="stock-banner-sep">·</span><span class="stock-banner-item diff">⚠ ${conDif} con diferencia</span><span class="stock-banner-sep">·</span><span class="stock-banner-item pend">${sinContar} sin contar</span></div>
         <button class="tb-btn" id="tb-pd-buscar">🔍 Buscar artículo<small>si no lee el código</small></button>
         <div class="tb-lines">${filasPedido}</div>
@@ -202,11 +210,16 @@ function cerrarRecepcion(ctx, e, rec, guardaBorrador) {
     <textarea class="tb-input" id="tb-pd-inc" rows="2" placeholder="Incidencias para CISA (golpeados, mal estado, bultos…)" style="margin-top:10px">${esc(rec.incidencias || '')}</textarea>
     <button class="add-btn" id="tb-pd-conf" style="margin-top:10px">Confirmar entrada (${recibidoTotal} uds)</button>`);
   if (!conDif.length) beepMatch();
-  document.getElementById('tb-pd-inc').addEventListener('input', ev => { rec.incidencias = ev.target.value; guardaBorrador(); });
+  // Mientras se registra, e.pedido está a null: guardar el borrador ahí escribiría el estado sin el pedido.
+  document.getElementById('tb-pd-inc').addEventListener('input', ev => { rec.incidencias = ev.target.value; if (!enviando) guardaBorrador(); });
   document.getElementById('tb-pd-conf').onclick = async () => {
     if (enviando) return;
     if (!mismoEstado(ctx, e)) return;
     enviando = true;
+    // Una sola escritura: la entrada se guarda YA sin el pedido pendiente. Si el móvil muere justo
+    // después, no puede quedar la entrada registrada y el pedido contado al lado (doble entrada).
+    const prev = e.pedido;
+    e.pedido = null;
     try {
       const mov = await registrar(e, {
         tipo: 'entrada',
@@ -220,12 +233,13 @@ function cerrarRecepcion(ctx, e, rec, guardaBorrador) {
           diferencias: conDif,
         },
       });
-      e.pedido = null; ctx.guardar(e); ctx.setOnEan(null);
+      ctx.setOnEan(null);
       closeSheet();
       const k = conDif.length;
       toast(k ? `Recepción registrada: ${k} diferencia${k === 1 ? '' : 's'} apuntada${k === 1 ? '' : 's'} como descuadre` : 'Recepción registrada: llegó todo', k ? 'red' : 'green', 3500);
       mostrarResumen(ctx, mov);
     } catch (err) {
+      e.pedido = prev;   // registrar no cambió nada (ni en memoria ni en el disco): el pedido sigue como estaba
       toast('No se pudo registrar: ' + ((err && err.message) || err), 'red', 4000);
     } finally { enviando = false; }
   };
@@ -278,12 +292,12 @@ async function cargarExcelPedido(ctx) {
     if (!mismoEstado(ctx, e)) return;
     if (e.pedido && e.pedido.recepcion) return toast('Hay un conteo empezado sobre el pedido actual: cancélalo antes de cargar otro', 'red', 4000);
     const { proveedor, factura, arc } = refPedidoDeNombre(archivo);
-    const avisos = { sinCodigo: res.sinCodigo || 0, noTabaco, desconocidas };
+    const avisos = { sinCodigo: res.sinCodigo || 0, sinCodigoFilas: res.sinCodigoFilas || [], saltadas: res.saltadas || 0, noTabaco, desconocidas };
     const anterior = e.pedido;
     e.pedido = { id: nuevoId('pd'), archivo, proveedor, factura, arc, cargado: new Date().toISOString(), lineas, avisos, recepcion: null };
     if (!ctx.guardar(e)) { e.pedido = anterior; return; }
     const partes = partesAvisos(avisos);
-    toast(`Pedido cargado: ${lineas.length} artículos · ${totalLineas(lineas)} uds` + partes.map(x => ' · ' + x).join(''), partes.length ? 'red' : 'green', 5000);
+    toast(`Pedido cargado: ${arts(lineas.length)} · ${totalLineas(lineas)} uds` + partes.map(x => ' · ' + x).join(''), partes.length ? 'red' : 'green', 5000);
     ctx.refrescar();
   } catch (err) { toast((err && err.message) || 'No se pudo leer el Excel', 'red', 4000); }
 }
