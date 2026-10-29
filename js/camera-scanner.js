@@ -30,6 +30,27 @@ function _beep() {
   } catch {}
 }
 
+// Pip corto de «lectura registrada» (el mismo tono que el de la cámara), también sin cámara abierta.
+// Lo usa el módulo de Tabaco con la pistola: una lectura normal suena así; el 1-up queda para cuando cuadra.
+export function beepOk() {
+  try {
+    const ctx  = _ctx || _getSoundCtx();
+    const play = () => {
+      const osc  = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.frequency.value = 1760;
+      const t = ctx.currentTime + 0.02;
+      gain.gain.setValueAtTime(0.3, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+      osc.start(t);
+      osc.stop(t + 0.12);
+    };
+    ctx.state === 'running' ? play() : ctx.resume().then(play);
+  } catch {}
+}
+
 // Dos notas descendentes: sonido de error / no encontrado
 export function beepError() {
   try {

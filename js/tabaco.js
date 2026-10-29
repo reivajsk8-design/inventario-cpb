@@ -3,7 +3,7 @@ import { getAllProducts } from './db.js';
 import { openSheet, closeSheet, openQtySheet, toast, esc } from './ui.js';
 import { startScanner } from './scanner.js';
 import { matchesEan, openAssignEanSheet } from './eans.js';
-import { cameraSupported, openCamera, closeCamera, resumeCamera, beepError, beepMatch } from './camera-scanner.js';
+import { cameraSupported, openCamera, closeCamera, resumeCamera, beepError, beepOk } from './camera-scanner.js';
 import { esTabaco, infoRefs, valesPendientes, descuadres, anulados, totalLineas, fmtFecha, fmtHora, siguienteVale, pinValido, calcularStock, recepcionActiva } from './tabaco-core.js';
 import { cargar, guardar, crear, registrar, verificarIntegridad, buscarPersonaPorPin, esAdminPin, registroAnterior, KEY } from './tabaco-store.js';
 import { abrirInventario } from './tabaco-inventario.js';
@@ -116,7 +116,10 @@ function manejarEan(ean, onDone) {
     openAssignEanSheet(ean, _all, prod => { _onEan(prod, seguir); }, seguir);
     return;
   }
-  beepMatch(); _onEan(p, seguir);
+  // Lectura registrada: pip corto con la pistola (la cámara ya pita sola al detectar). El 1-up lo decide
+  // cada pantalla: solo cuando la cantidad contada cuadra con el pedido.
+  if (!onDone) beepOk();
+  _onEan(p, seguir);
 }
 
 function catalogo() {

@@ -18,7 +18,7 @@ PWA mobile-first de gestión de inventario para la empresa CPB. Sin framework, v
 - **⚠️ Existe `master` pero NO despliega.** Nunca hagas push a master creyendo que va a producción.
 - **Deploy:** automático vía GitHub Pages al push a `main`
 - **Remote:** `https://github.com/reivajsk8-design/inventario-cpb.git`
-- **SW:** auto-incrementa `CACHE_NAME` en cada commit vía git pre-commit hook. Última versión: `cpb-v114`
+- **SW:** auto-incrementa `CACHE_NAME` en cada commit vía git pre-commit hook. Última versión: `cpb-v115`
 
 ```bash
 # Flujo correcto
@@ -47,7 +47,7 @@ C:\Inventario CPB\          ← GIT ROOT (producción)
     ├── db.js               ← IndexedDB: productos, albaranes, fotos, meta
     ├── filters.js          ← filterProducts(), mountFilterBar() — icono #fb-scan: viewfinder SVG
     ├── scanner.js          ← Escáner HID (keydown listener, buffer EAN)
-    ├── camera-scanner.js   ← BarcodeDetector API: openCamera/closeCamera/resumeCamera/beepMatch/beepError
+    ├── camera-scanner.js   ← BarcodeDetector API: openCamera/closeCamera/resumeCamera/beepOk/beepMatch/beepError
     ├── stock.js            ← getStock/saveStock/clearStock, parseStockXLSX
     ├── ui.js               ← toast(), openSheet(), closeSheet(), openQtySheet(), openCountSheet()
     ├── eans.js             ← matchesEan(), openAssignEanSheet()
@@ -142,6 +142,7 @@ Escáner de cámara vía BarcodeDetector API. Solo disponible en Chrome/Edge And
 - `resumeCamera()` — reanuda el bucle de detección tras confirmar un artículo
 - `closeCamera()` — para el stream y cierra el AudioContext
 - `beepMatch()` — jingle 1-up Mario cuando conteo cuadra con stock del sistema
+- `beepOk()` — pip corto de «lectura registrada» (mismo tono que la cámara, funciona sin cámara). En **Tabaco** la pistola suena así en cada lectura válida; el 1-up queda solo para cuando la cantidad contada **cuadra con el pedido** (petición de Jose 29-10-2026: antes cada lectura sonaba con el 1-up y no se distinguía)
 - `beepError()` — dos notas descendentes cuando EAN no encontrado en BD
 - Internamente usa `_soundCtx` persistente (con `resume()`) para sonidos fuera de la cámara
 
