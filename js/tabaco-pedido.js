@@ -75,11 +75,11 @@ function fichaPedido(ctx) {
 const cont = () => document.getElementById('main');
 const tiene = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
 
-// Contar el palé contra el pedido. Igual que el inventario: cada lectura SUMA, tocar una línea deja
-// un número exacto, retomar el conteo pide SIEMPRE el PIN y un conteo sin nada leído no se guarda.
-// Es un conteo CIEGO: lo que dice el pedido no se enseña hasta que se lee el artículo (así se
-// cuenta lo que hay, no lo que se espera). Aquí no se registra ningún movimiento: el borrador
-// vive en `estado.pedido.recepcion` hasta que se cierre la recepción.
+// Contar el palé contra el pedido. Como en Conteos: cada lectura SUMA (pistola, cámara, buscador o tocar la
+// línea), desde la hoja se corrige el total o se pone 0, retomar el conteo pide SIEMPRE el PIN y un conteo sin
+// nada leído no se guarda. Cada fila enseña lo pedido desde el principio (en gris hasta contarla; antes era un
+// conteo ciego, Jose pidió verlo el 29-10-2026). Lo contado manda: el stock sube con lo recibido, nunca con lo esperado.
+// Aquí no se registra ningún movimiento: el borrador vive en `estado.pedido.recepcion` hasta cerrar la recepción.
 async function contarPedido(ctx) {
   const e = ctx.estado, pedido = e.pedido;
   if (!pedido) return;
@@ -120,29 +120,33 @@ async function contarPedido(ctx) {
     else if (c > esp) { beepError(); toast(`${nombre(p)}: ${c} contados, pedido ${esp} (+${c - esp})`, 'red'); }
     else toast(`${nombre(p)}: ${c} de ${esp}`);
   };
-  // Una lectura (pistola, cámara o buscador) SUMA lo tecleado. `onDone` (opcional) reanuda la cámara.
+  // Una lectura (pistola, cámara, buscador o tocar la línea) SUMA lo tecleado, como en Conteos: las cajas de un
+  // mismo artículo pueden venir repartidas por el palé. Desde la misma hoja se corrige el total («Dejar recibido
+  // en ×N en vez de X») o se pone 0 («No vino ninguno»). `onDone` (opcional) reanuda la cámara.
   const contar = (p, onDone) => {
     if (!p) return;
+    const fin = () => { if (onDone) onDone(); };
     if (!esperado.has(p.ref) && !tiene(rec.contado, p.ref)) {
       beepError();
-      if (!confirm(`"${nombre(p)}" no está en el pedido. ¿Añadirlo como sobrante?`)) { if (onDone) onDone(); return; }
+      if (!confirm(`"${nombre(p)}" no está en el pedido. ¿Añadirlo como sobrante?`)) return fin();
     }
     openQtySheet({ ...p, family: p.family || 'TABACO' }, [1, 5, 10, 20], 'Recibido +{n}', qty => {
-      apunta(p, (rec.contado[p.ref] || 0) + qty); aviso(p);
-      if (onDone) onDone();
+      apunta(p, (rec.contado[p.ref] || 0) + qty); aviso(p); fin();
     });
-  };
-  // Tocar una línea deja un número exacto. La hoja de cantidad no confirma 0: va en su propio botón.
-  const fijar = p => {
-    if (!p) return;
-    openQtySheet({ ...p, family: p.family || 'TABACO' }, [1, 5, 10, 20], 'Dejar recibido en ×{n}', qty => { apunta(p, qty); aviso(p); });
-    const add = document.getElementById('np-add');
-    if (add) {
-      const cero = document.createElement('button');
-      cero.className = 'tb-danger'; cero.style.marginTop = '8px'; cero.textContent = 'No vino ninguno (0)';
-      cero.onclick = () => { apunta(p, 0); aviso(p); closeSheet(); };
-      add.insertAdjacentElement('afterend', cero);
-    }
+    const add = document.getElementById('np-add'), display = document.getElementById('np-display');
+    if (!add) return;
+    const yaHay = rec.contado[p.ref];
+    const exacto = document.createElement('button');
+    exacto.className = 'tb-link'; exacto.id = 'tb-pd-exacto'; exacto.style.cssText = 'display:block;width:100%;margin-top:6px;text-align:center';
+    const rotulo = () => { exacto.textContent = `✎ Dejar recibido en ×${display ? display.textContent : ''}${yaHay !== undefined ? ` en vez de ${yaHay}` : ''}`; };
+    rotulo();
+    if (display) new MutationObserver(rotulo).observe(display, { childList: true, characterData: true, subtree: true });
+    exacto.onclick = () => { apunta(p, Number(display && display.textContent) || 0); aviso(p); closeSheet(); fin(); };
+    const cero = document.createElement('button');
+    cero.className = 'tb-danger'; cero.style.marginTop = '8px'; cero.textContent = 'No vino ninguno (0)';
+    cero.onclick = () => { apunta(p, 0); aviso(p); closeSheet(); fin(); };
+    add.insertAdjacentElement('afterend', exacto);
+    exacto.insertAdjacentElement('afterend', cero);
   };
   ctx.setOnEan(contar);
   const salir = () => { ctx.setOnEan(null); ctx.refrescar(); };
@@ -163,7 +167,7 @@ async function contarPedido(ctx) {
     cont().innerHTML = `
       <div class="tb-wrap">
         <div class="tb-head"><h2>📦 Recepción ${esc(etiquetaPedido(pedido))}</h2><button class="tb-link" id="tb-pd-cancel">Cancelar</button></div>
-        <div class="tb-card"><div class="tb-k">${esc(rec.personaNombre)} · desde ${fmtHora(rec.iniciado)}</div><div class="tb-v">${leidas.length} <small>de ${lineas.length} artículos del pedido contados · ${uds} uds</small></div><div class="tb-s">Pistolea o usa la cámara 📷. Cada lectura SUMA. Toca una línea para dejar un número exacto (o 0). Los cartones golpeados o en mal estado NO se cuentan: apúntalos en Incidencias al cerrar.</div></div>
+        <div class="tb-card"><div class="tb-k">${esc(rec.personaNombre)} · desde ${fmtHora(rec.iniciado)}</div><div class="tb-v">${leidas.length} <small>de ${lineas.length} artículos del pedido contados · ${uds} uds</small></div><div class="tb-s">Pistolea o usa la cámara 📷. Cada lectura SUMA, también al tocar una línea (las cajas pueden venir repartidas). Para corregir el total o poner 0, toca la línea y usa los botones de abajo. Los cartones golpeados o en mal estado NO se cuentan: apúntalos en Incidencias al cerrar.</div></div>
         <div class="stock-banner"><span class="stock-banner-item match">✓ ${cuadran} cuadrados</span><span class="stock-banner-sep">·</span><span class="stock-banner-item diff">⚠ ${conDif} con diferencia</span><span class="stock-banner-sep">·</span><span class="stock-banner-item pend">${sinContar} sin contar</span></div>
         <button class="tb-btn" id="tb-pd-buscar">🔍 Buscar artículo<small>si no lee el código</small></button>
         <div class="tb-lines">${filasPedido}</div>
@@ -177,7 +181,7 @@ async function contarPedido(ctx) {
     };
     document.getElementById('tb-pd-buscar').onclick = () => ctx.buscarArticulo(contar);
     const porRef = new Map([...lineas, ...sobrantes].map(p => [p.ref, p]));
-    cont().querySelectorAll('.tb-lines [data-ref]').forEach(b => b.onclick = () => fijar(porRef.get(b.dataset.ref)));
+    cont().querySelectorAll('.tb-lines [data-ref]').forEach(b => b.onclick = () => contar(porRef.get(b.dataset.ref)));
     document.getElementById('tb-pd-cerrar').onclick = () => { if (refs.length) cerrarRecepcion(ctx, e, rec, guardaBorrador); };
   };
   pinta();
