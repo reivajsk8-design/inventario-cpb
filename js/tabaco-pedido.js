@@ -146,7 +146,8 @@ async function contarPedido(ctx) {
   };
   ctx.setOnEan(contar);
   const salir = () => { ctx.setOnEan(null); ctx.refrescar(); };
-  const fila = (p, m, c, cls) => `<button class="tb-line" data-ref="${esc(p.ref)}" style="width:100%;text-align:left"><div class="tb-n">${esc(nombre(p))}<div class="tb-m">${esc(m)}</div></div><div class="tb-q ${cls}">${c === undefined ? '—' : c}</div></button>`;
+  // Columna derecha: el número grande (pedido en gris hasta contar; luego lo contado) y una etiqueta pequeña debajo.
+  const fila = (p, m, c, cls, sub) => `<button class="tb-line" data-ref="${esc(p.ref)}" style="width:100%;text-align:left"><div class="tb-n">${esc(nombre(p))}<div class="tb-m">${esc(m)}</div></div><div class="tb-qq"><div class="tb-q ${cls}">${c}</div>${sub ? `<small>${esc(sub)}</small>` : ''}</div></button>`;
   const pinta = () => {
     const contado = rec.contado, refs = Object.keys(contado);
     const sobrantes = refs.filter(r => !esperado.has(r)).map(r => ({ ref: r, name: (rec.nombres[r] && rec.nombres[r].name) || r, ean: (rec.nombres[r] && rec.nombres[r].ean) || '', family: 'TABACO' }));
@@ -155,9 +156,9 @@ async function contarPedido(ctx) {
     const conDif = leidas.length - cuadran + sobrantes.length, sinContar = lineas.length - leidas.length;
     const uds = refs.reduce((a, r) => a + (Number(contado[r]) || 0), 0);
     const filasPedido = lineas.map(l => {
-      if (!tiene(contado, l.ref)) return fila(l, l.ref, undefined, '');   // a ciegas: aún no se ha leído
+      if (!tiene(contado, l.ref)) return fila(l, `${l.ref} · pedido ${l.qty}`, l.qty, 'dim', 'pedido');   // aún no contado: se ve lo pedido, en gris
       const c = contado[l.ref];
-      return fila(l, `${l.ref} · pedido ${l.qty} · recibido ${c}`, c, c < l.qty ? 'neg' : c > l.qty ? 'pos' : '');
+      return fila(l, `${l.ref} · pedido ${l.qty} · recibido ${c}`, c, c < l.qty ? 'neg' : c > l.qty ? 'pos' : '', `de ${l.qty}`);
     }).join('');
     cont().innerHTML = `
       <div class="tb-wrap">
@@ -167,7 +168,7 @@ async function contarPedido(ctx) {
         <button class="tb-btn" id="tb-pd-buscar">🔍 Buscar artículo<small>si no lee el código</small></button>
         <div class="tb-lines">${filasPedido}</div>
         ${sobrantes.length ? `<div class="tb-pin-sub" style="text-align:left;margin:0 4px">No estaban en el pedido</div>
-        <div class="tb-lines">${sobrantes.map(p => fila(p, `${p.ref} · no estaba en el pedido · recibido ${contado[p.ref]}`, contado[p.ref], 'pos')).join('')}</div>` : ''}
+        <div class="tb-lines">${sobrantes.map(p => fila(p, `${p.ref} · no estaba en el pedido · recibido ${contado[p.ref]}`, contado[p.ref], 'pos', 'no pedido')).join('')}</div>` : ''}
         <button class="add-btn" id="tb-pd-cerrar" ${refs.length ? '' : 'disabled style="opacity:0.4"'}>Cerrar recepción</button>
       </div>`;
     document.getElementById('tb-pd-cancel').onclick = () => {

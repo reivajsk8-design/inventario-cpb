@@ -590,6 +590,10 @@
 .tb-line .tb-q { font-size: 1.05rem; font-weight: 800; min-width: 44px; text-align: right; font-variant-numeric: tabular-nums; }
 .tb-line .tb-q.neg { color: var(--red); }
 .tb-line .tb-q.pos { color: var(--green, #30d158); }
+.tb-line .tb-qq { display: flex; flex-direction: column; align-items: flex-end; min-width: 44px; line-height: 1.15; }
+.tb-line .tb-qq .tb-q { min-width: 0; }
+.tb-line .tb-qq small { font-size: 0.66rem; color: var(--text3); font-weight: 500; white-space: nowrap; }
+.tb-line .tb-q.dim { color: var(--text3); font-weight: 600; }
 .tb-empty { color: var(--text3); font-size: 0.85rem; text-align: center; padding: 18px; }
 .tb-pin-dots { display: flex; justify-content: center; gap: 12px; margin: 12px 0 8px; height: 16px; }
 .tb-pin-dots i { width: 14px; height: 14px; border-radius: 50%; background: var(--surface2); display: block; }
