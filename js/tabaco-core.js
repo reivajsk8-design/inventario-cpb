@@ -156,9 +156,11 @@ export function parseFilasStock(rows) {
   for (let i = 0; i < Math.min(rows.length, 15); i++) {
     const h = (rows[i] || []).map(low);
     const iRef = h.findIndex(c => REF.includes(c)); if (iRef < 0) continue;
-    const iQty = QTY.map(q => h.indexOf(q)).find(x => x >= 0); if (iQty === undefined) continue;
+    // «Detalle del stock» de Proxium (Tenerife): la cantidad va en «Stock» y «Almacén» es el NÚMERO de almacén
+    // (04-11-2026); en el export de Conteos no hay columna «Stock» a secas (es «Stock sistema») y manda «Almacén»
+    const iQty = h.includes('stock') ? h.indexOf('stock') : QTY.map(q => h.indexOf(q)).find(x => x >= 0); if (iQty === undefined) continue;
     const iNom = NOM.map(q => h.indexOf(q)).find(x => x >= 0), iEan = h.indexOf('ean');
-    const lineas = [], ceros = [];
+    const porRef = new Map();
     let saltadas = 0;
     for (const r of rows.slice(i + 1)) {
       const ref = norm(r[iRef]); if (!ref) continue;
@@ -168,12 +170,16 @@ export function parseFilasStock(rows) {
       if (cruda === '' || cruda === null || cruda === undefined || norm(cruda) === '') { saltadas++; continue; }
       const q = Math.trunc(Number(norm(cruda).replace(',', '.')));
       if (!Number.isFinite(q) || q < 0) { saltadas++; continue; }
-      const l = { ref, name: iNom !== undefined ? norm(r[iNom]) : '', ean: iEan >= 0 ? norm(r[iEan]) : '', qty: q };
-      if (q > 0) lineas.push(l); else ceros.push(ref);
+      // el mismo artículo en varias filas (partidas de Proxium, o dos personas en Conteos) se suma;
+      // Proxium pone varios EAN separados por «;»: se queda el primero
+      const prev = porRef.get(ref);
+      if (prev) { prev.qty += q; continue; }
+      porRef.set(ref, { ref, name: iNom !== undefined ? norm(r[iNom]) : '', ean: iEan >= 0 ? norm(r[iEan]).split(';')[0].trim() : '', qty: q });
     }
-    return { lineas, ceros, saltadas, cabecera: i + 1 };
+    const todas = [...porRef.values()];
+    return { lineas: todas.filter(l => l.qty > 0), ceros: todas.filter(l => l.qty === 0).map(l => l.ref), saltadas, cabecera: i + 1 };
   }
-  throw new Error('No encontré la cabecera: espero "REF + Almacén" (export de Conteos) o "Artículo + Cantidad" (Proxium)');
+  throw new Error('No encontré la cabecera: espero "REF + Almacén" (export de Conteos), "Artículo + Cantidad" (Proxium) o "Código + Stock" (Detalle del stock de Proxium)');
 }
 
 // Pedido esperado: el Excel de compra de TransferScan (también sirve Conteos o Proxium). Las filas del

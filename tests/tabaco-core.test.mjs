@@ -115,6 +115,31 @@ test('parseFilasStock: export de Conteos (REF + Almacén) y Proxium (Artículo +
   assert.throws(() => parseFilasStock([['Hola', 'Mundo'], [1, 2]]), /cabecera/);
 });
 
+test('parseFilasStock: «Detalle del stock» de Proxium (Tenerife): cantidad en «Stock», no en «Almacén» (nº de almacén); partidas sumadas; primer EAN', () => {
+  const tf = [['Listado: Consulta dinámica del stock -> Detalle del stock      (COMERCIANTS DEL PORT DE BARCELONA)'], [],
+    ['Código', 'Descripción', 'EAN', 'Stock', 'Disponible', 'U. Med.', 'Almacén', 'Capac. Env.', 'Coste unit.', 'Coste total', 'Ubicación', 'Cod. proveedor (int)', 'Cod. estado (int)', 'Familia', 'Categoría'],
+    ['AMBL500', 'BOLSA AMBER LEAF 10 X 50 GR  (500 GR)', '4033100062520;7630073603575', 284, 284, '3', '1', 0.5, 45.2, 12836.8, 'TIENDA', '', '', 'TABACO', ''],
+    ['MARR40', 'CARTON MARLBORO RED FORWARD KS BOX 200 CARTON', '7622100972518;7622100879107', 100, 100, '2', '1', 0.2, 16.585, 1658.5, 'TIENDA', '', '', 'TABACO', ''],
+    ['MARR40', 'CARTON MARLBORO RED FORWARD KS BOX 200 CARTON', '7622100972518;7622100879107', 26, 26, '2', '1', 0.2, 18.8, 488.8, 'TIENDA', '', '', 'TABACO', ''],
+    ['TERW20', 'CARTON TEREA WARM', '7622100581581', 0, 0, '3', '1', 0.053, 20.2, 0, 'TIENDA', '', '', 'TABACO', '']];
+  const r = parseFilasStock(tf);
+  assert.deepEqual(r.lineas, [
+    { ref: 'AMBL500', name: 'BOLSA AMBER LEAF 10 X 50 GR  (500 GR)', ean: '4033100062520', qty: 284 },
+    { ref: 'MARR40', name: 'CARTON MARLBORO RED FORWARD KS BOX 200 CARTON', ean: '7622100972518', qty: 126 }]);
+  assert.deepEqual(r.ceros, ['TERW20']);
+  assert.equal(r.cabecera, 3);
+});
+
+test('parseFilasStock: el mismo artículo en dos filas se suma (también en el export de Conteos)', () => {
+  const rows = [['Usuario', 'Terminal', 'REF', 'Nombre', 'EAN', 'Ref. Proveedor', 'Familia', 'Almacén', 'Tienda', 'Total'],
+    ['Olek', 'E', 'MARG40', 'CARTON MARLBORO GOLD 3.0', '7622100912392', '', 'CISA', '40', '0', '40'],
+    ['Ana', 'E', 'MARG40', 'CARTON MARLBORO GOLD 3.0', '7622100912392', '', 'CISA', '39', '0', '39'],
+    ['Ana', 'E', 'TERW20', 'CARTON TEREA WARM', '', '', 'CISA', '0', '0', '0']];
+  const r = parseFilasStock(rows);
+  assert.deepEqual(r.lineas.map(l => [l.ref, l.qty]), [['MARG40', 79]]);
+  assert.deepEqual(r.ceros, ['TERW20']);
+});
+
 test('parseFilasStock: la celda de cantidad vacía se salta (no es un 0); el 0 explícito sí cuenta', () => {
   const rows = [['REF', 'Nombre', 'EAN', 'Almacén'],
     ['MARG40', 'CARTON MARLBORO GOLD', '7622100912392', ''],        // sin contar: se salta
