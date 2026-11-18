@@ -318,3 +318,28 @@ git push origin main
   PIN de administrador del módulo Tabaco si la PDA lo tiene; si no, un **PIN de supervisor propio de la PDA** (`localStorage.ic_pinsup` = `{salt, hash}`,
   PBKDF2 de `tabaco-core`) que se crea la primera vez que alguien pulsa Cambiar (se pide dos veces). 5 fallos seguidos → 30 s de espera. Puros en
   `tienda-core.js`: `creaPinSupervisor`, `compruebaPinSupervisor`, `PIN_SUP_KEY`. La pregunta inicial «¿De qué tienda es esta PDA?» NO pide PIN.
+
+### 2026-11-18 — Pedido ÚNICO de Tenerife: un Excel para el proveedor elegido (Jose: «en Tenerife un pedido lo sirve un solo proveedor») — PUBLICADO el 18-11-2026 con el «sí» de Jose (push a main + sync --force con equivs.json y cost_tf)
+
+- **Problema:** en la PDA de Tenerife el Excel se repartía por `family` (= proveedor de Barcelona) y la encargada acababa con 5 archivos para un
+  pedido que allí sirve UN proveedor (V&B, Alfran, AHEMBO…). Barcelona sigue EXACTAMENTE igual (un Excel por familia).
+- **Cómo funciona (solo si `getTienda() === 'tf'`):** en Pedidos, bajo las terminales, barra «Proveedor del pedido» (`<select>` con los proveedores de
+  Tenerife + «✏️ Otro proveedor…» que pide el nombre; se recuerda en localStorage **`ipv`**). «⬇ Exportar pedido» abre la hoja **«Excel del pedido»**
+  (`openExportSheetTF` en `pedidos-export.js`): terminal, el mismo selector, «N refs · M uds · K de N con código del proveedor» y el botón
+  «⬇ Excel del pedido» (apagado sin proveedor). Al exportar: UN Excel `pedido_<PROVEEDOR>_TermTF_<usuario>_<fecha>.xlsx`, entrada en el historial
+  con `proveedor` = el elegido y **`modo: 'tf'`** (las líneas llevan `codProv`), y el pedido queda a cero. En el historial, «Volver a descargar» saca el
+  mismo Excel de Tenerife y «Repetir» vuelve a poner ese proveedor en el selector.
+- **Excel de Tenerife** (`filasExcelTF`): `Usuario · Terminal · Código Proxium · Nombre · EAN · Proveedor del pedido · Código del proveedor · Familia (Barcelona)
+  · Cantidad pedida · Coste` (coste = `cost_tf` si lo hay, si no `cost`). **Código del proveedor** (`codigoProveedor`): la equivalencia de ese proveedor
+  en `equivs.json`; si no, la ref propia del artículo cuando su familia ES ese proveedor; si no, vacío (Jose lo ve y lo resuelve).
+- **Datos nuevos del sync:** `equivs.json` = `{ equivs: {ref: {CLAVE_PROVEEDOR: 'código'}}, alias: {…} }` (de las equivalencias del Matcher; varios códigos
+  del mismo proveedor → «1 / 2»; sin lápidas ni huérfanas) y el campo **`cost_tf`** en cada producto (posición 14 del Matcher; `null` = sin coste TF).
+  Se cargan en `app.js` con `loadEquivs()` (`js/equivs.js`, igual que `loadEansExtra`); `sw.js` los sirve red-primero como `eans-extra.json`.
+- **Módulos nuevos:** `js/proveedores-tf.js` (puro: `normProv`/`claveProv`/`mismaClave` calcados de `normProv`/`eqProv` del Matcher, `ALIAS_DEFECTO`,
+  `PROVEEDORES_TF` = los de la lista de Proxium que sirven a Tenerife, habituales delante) y `js/equivs.js`. En `pedidos-core.js`: `codigoProveedor`,
+  `pedidoUnico`, `filasExcelTF`. CSS `.ph-provbar` en components.css.
+- **Pruebas:** `node --test tests/*.test.mjs` 48 (+4 pedidos-core, +4 proveedores-tf) · navegador: scratchpad de Claude `ahembo/scripts/humo_tf.mjs`
+  (sirve el repo en 127.0.0.1:8767, Chrome sin ventana por CDP con la BD real y XLSX falso; 26 checks: selector, hoja, Excel con 4022/4026 y celda
+  vacía para Mentos, pedido a cero, historial con modo tf, volver a descargar, repetir con su proveedor, y Barcelona intacta).
+- **Trampas:** `pedidos.js`, `pedidos-export.js`, `app.js` y `sw.js` son CRLF. En las pruebas de navegador hay que esperar a que `init()` termine
+  (la Lista pintada) antes de cambiar de pestaña: `switchTab('lista')` del final del arranque pisa lo que se haya pulsado antes.

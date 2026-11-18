@@ -5,7 +5,7 @@ import { openSheet, closeSheet, openQtySheet, toast, esc } from './ui.js';
 import { startScanner }                  from './scanner.js';
 import { matchesEan, openAssignEanSheet } from './eans.js';
 import { cameraSupported, openCamera, closeCamera, resumeCamera, beepError } from './camera-scanner.js';
-import { openExportSheet, openHistorySheet, getHistory } from './pedidos-export.js';
+import { openExportSheet, openHistorySheet, getHistory, setProveedorTF, selectorProveedorHtml } from './pedidos-export.js';   // + proveedor del pedido único (Tenerife, 18-11-2026)
 import { TERMINALS, TERM_COLORS, defaultTerminal } from './terminales.js';
 import { getTienda } from './tienda.js';
 
@@ -194,6 +194,7 @@ function renderList() {
         </button>`;
       }).join('')}
     </div>
+    ${getTienda() === 'tf' ? `<div class="ph-provbar" style="margin:0 12px 6px"><span>Proveedor<br>del pedido</span>${selectorProveedorHtml('sel-prov-ped')}</div>` : ''}
     <div style="padding:0 12px 4px;text-align:right;font-size:0.72rem;color:var(--text3)">
       <strong style="color:var(--accent)">${pedidos.length} refs</strong> · ${totalUnits} uds
     </div>
@@ -202,7 +203,7 @@ function renderList() {
       <button id="btn-hist-pedidos" style="flex:1;padding:11px 8px;border-radius:12px;background:var(--surface2);color:var(--text);font-size:0.8rem;font-weight:700">📜 Historial${nHist ? ' (' + nHist + ')' : ''}</button>
     </div>
     <div style="padding:0 12px 4px;font-size:0.65rem;color:var(--text3)">
-      📡 Escanea para añadir · toca para editar cantidad · el Excel sale por proveedor
+      📡 Escanea para añadir · toca para editar cantidad · ${getTienda() === 'tf' ? 'un Excel por pedido, para el proveedor elegido' : 'el Excel sale por proveedor'}
     </div>
     ${items.length === 0
       ? (!hasFilter
@@ -239,6 +240,7 @@ function renderList() {
   });
   document.getElementById('btn-exp-pedido')?.addEventListener('click', () => openExportSheet(_all, renderList));
   document.getElementById('btn-hist-pedidos')?.addEventListener('click', () => openHistorySheet(_all, renderList));
+  document.getElementById('sel-prov-ped')?.addEventListener('change', e => { setProveedorTF(e.target.value, e.target); renderList(); });
 
   main.querySelectorAll('.prod-item').forEach(el => {
     el.addEventListener('click', () => {

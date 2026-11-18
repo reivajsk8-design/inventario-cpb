@@ -607,3 +607,7 @@
 .tb-tabs { display: flex; gap: 6px; }
 .tb-search { position: sticky; top: 0; background: var(--bg); padding: 4px 0 8px; z-index: 2; }
 .tb-danger { color: var(--red); background: rgba(255,69,58,0.12); border-radius: 12px; padding: 12px; width: 100%; font-weight: 700; font-size: 0.82rem; }
+
+/* ── Pedido único de Tenerife (18-11-2026): selector del proveedor del pedido ── */
+.ph-provbar{display:flex;align-items:center;gap:10px;padding:8px 10px 8px 12px;margin:0 0 8px;background:var(--surface2);border-radius:12px;font-size:0.72rem;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.02em}
+.ph-provbar select{flex:1;min-width:0;padding:10px 8px;border-radius:10px;background:var(--surface);color:var(--text);font-weight:800;font-size:0.9rem;text-transform:none;letter-spacing:0;-webkit-appearance:menulist}

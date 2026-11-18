@@ -1,6 +1,6 @@
 // sw.js — Service Worker para Inventario CPB
 // CACHE_NAME se incrementa automáticamente via git pre-commit hook
-const CACHE_NAME = 'cpb-v119';
+const CACHE_NAME = 'cpb-v120';
 
 const PRECACHE = [
   './',
@@ -29,6 +29,8 @@ const PRECACHE = [
   './js/pedidos.js',
   './js/pedidos-core.js',
   './js/pedidos-export.js',
+  './js/proveedores-tf.js',
+  './js/equivs.js',
   './js/tabaco-core.js',
   './js/tabaco-store.js',
   './js/tabaco.js',
@@ -63,7 +65,7 @@ self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
 
   // Network-first para la BD y EANs extra (se actualizan con frecuencia)
-  if (url.pathname.endsWith('db.json.gz') || url.pathname.endsWith('db-version.json') || url.pathname.endsWith('eans-extra.json')) {
+  if (url.pathname.endsWith('db.json.gz') || url.pathname.endsWith('db-version.json') || url.pathname.endsWith('eans-extra.json') || url.pathname.endsWith('equivs.json')) {
     e.respondWith(
       fetch(e.request)
         .then(res => {

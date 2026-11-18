@@ -4,7 +4,9 @@
 // La lógica pura está en pedidos-core.js. Pedido de Jose del 23-09-2026 (la encargada mezclaba proveedores en un pedido).
 import { openSheet, closeSheet, toast, esc } from './ui.js';
 import { agruparPorProveedor, filasExcel, nombreArchivo, nuevaEntradaHistorial, recortaHistorial,
-         quitarDelPedido, repetirEnPedido, fechaHoy, fmtFecha, HIST_KEY, HIST_MAX } from './pedidos-core.js';
+         quitarDelPedido, repetirEnPedido, fechaHoy, fmtFecha, HIST_KEY, HIST_MAX, pedidoUnico, filasExcelTF } from './pedidos-core.js';
+import { PROVEEDORES_TF } from './proveedores-tf.js';
+import { getEquivs, getAlias } from './equivs.js';
 
 import { TERMINALS, defaultTerminal } from './terminales.js';
 import { getTienda } from './tienda.js';
@@ -32,29 +34,91 @@ function ensureXLSX() {
     document.head.appendChild(s);
   });
 }
-async function descargaExcel(lineas, proveedor, terminal, user, fechaIso) {
+// modo 'tf' = pedido único de Tenerife (columnas con el proveedor del pedido y su código); si no, el Excel por familia de siempre
+async function descargaExcel(lineas, proveedor, terminal, user, fechaIso, modo) {
   const XLSX = await ensureXLSX();
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(filasExcel(lineas, user, terminal)), 'pedido');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(modo === 'tf' ? filasExcelTF(lineas, user, terminal, proveedor) : filasExcel(lineas, user, terminal)), 'pedido');
   const nombre = nombreArchivo(proveedor, terminal, user, fechaIso || fechaHoy());
   XLSX.writeFile(wb, nombre);
   return nombre;
 }
 
 // Exporta un grupo (proveedor): Excel → historial → fuera del pedido en curso
-async function exportarGrupo(g, terminal, onChange) {
+async function exportarGrupo(g, terminal, onChange, modo) {
   const user = getUser();
-  try { await descargaExcel(g.lines, g.family, terminal, user); }
+  try { await descargaExcel(g.lines, g.family, terminal, user, null, modo); }
   catch (e) { toast(e.message || 'No se pudo generar el Excel', 'red', 4000); return false; }
-  const h = getHistory(); h.unshift(nuevaEntradaHistorial(g, terminal, user)); saveHistory(h);
+  const ent = nuevaEntradaHistorial(g, terminal, user); if (modo === 'tf') ent.modo = 'tf';
+  const h = getHistory(); h.unshift(ent); saveHistory(h);
   saveOrders(quitarDelPedido(getOrders(), g.lines.map((l) => l.ref)));
-  toast(`${g.family}: ${g.refs} refs · ${g.uds} uds → Excel. Guardado en el historial y quitado del pedido.`, 'green', 3200);
+  toast(modo === 'tf' ? `Pedido para ${g.family}: ${g.refs} refs · ${g.uds} uds → Excel. Guardado en el historial; el pedido queda a cero.`
+                      : `${g.family}: ${g.refs} refs · ${g.uds} uds → Excel. Guardado en el historial y quitado del pedido.`, 'green', 3400);
   if (onChange) onChange();
   return true;
 }
 
+// ── Proveedor del pedido único (Tenerife, 18-11-2026): allí un pedido lo sirve UN proveedor, elegido por la encargada ────────
+const PROV_KEY = 'ipv';   // proveedor elegido para el pedido en curso (se recuerda en el dispositivo)
+export function proveedorTF() { return localStorage.getItem(PROV_KEY) || ''; }
+// v = nombre de la lista, '' (sin elegir) o '__otro__' (pide el nombre). Devuelve lo que queda guardado.
+export function setProveedorTF(v, selEl) {
+  if (v === '__otro__') {
+    const n = (window.prompt('Nombre del proveedor:') || '').trim();
+    if (!n) { if (selEl) selEl.value = proveedorTF(); return proveedorTF(); }
+    v = n.toUpperCase();
+  }
+  localStorage.setItem(PROV_KEY, v || '');
+  return v || '';
+}
+export function selectorProveedorHtml(id) {
+  const cur = proveedorTF();
+  const nombres = PROVEEDORES_TF.map((p) => p.nombre);
+  const lista = (cur && !nombres.includes(cur) ? [cur] : []).concat(nombres);
+  return `<select id="${id}" aria-label="Proveedor del pedido">
+    <option value=""${cur ? '' : ' selected'}>— Elige el proveedor —</option>
+    ${lista.map((n) => `<option value="${esc(n)}"${n === cur ? ' selected' : ''}>${esc(n)}</option>`).join('')}
+    <option value="__otro__">✏️ Otro proveedor…</option>
+  </select>`;
+}
+
+// Hoja «Excel del pedido» de Tenerife: todo el pedido en UN Excel para el proveedor elegido; al exportar, el pedido se vacía y queda
+// en el historial con ese proveedor (para repetirlo). Las líneas sin código conocido de ese proveedor salen con la celda vacía.
+function openExportSheetTF(all, onChange) {
+  const pinta = () => {
+    const prov = proveedorTF();
+    const g = pedidoUnico(getOrders(), all, prov, getEquivs(), getAlias());
+    if (!g.refs) { closeSheet(); toast('El pedido está vacío', 'amber'); return; }
+    const term = getTerminal();
+    openSheet(`
+      <div class="ph-title">⬇ Excel del pedido</div>
+      <div class="ph-sub">Un solo Excel con todo el pedido para el proveedor que elijas. Al exportarlo, el pedido se queda a cero y queda guardado en el historial para repetirlo.</div>
+      <div class="ph-terms">${TERMINALS.map((t) => `<button class="chip ${t === term ? 'on' : 'off'}" data-term="${t}">Term. ${t}</button>`).join('')}</div>
+      <div class="ph-provbar"><span>Proveedor<br>del pedido</span>${selectorProveedorHtml('ph-prov')}</div>
+      <div class="ph-list"><div class="ph-row">
+        <div class="ph-info">
+          <div class="ph-fam">${prov ? esc(prov) : 'Elige el proveedor arriba'}</div>
+          <div class="ph-meta">${g.refs} refs · ${g.uds} uds${prov ? ` · ${g.conCodigo} de ${g.refs} con código del proveedor` : ''}</div>
+        </div>
+      </div></div>
+      <button id="ph-tf" class="add-btn" ${prov ? '' : 'disabled style="opacity:0.4"'}>⬇ Excel del pedido</button>
+      <div class="ph-meta" style="text-align:center;margin-top:8px">El Excel lleva el código Proxium y el código del proveedor de cada artículo (vacío si ese proveedor no lo tiene asociado).</div>
+    `);
+    const box = document.getElementById('sheet-content');
+    box.querySelectorAll('[data-term]').forEach((b) => b.addEventListener('click', () => { setTerminal(b.dataset.term); pinta(); }));
+    document.getElementById('ph-prov')?.addEventListener('change', (e) => { setProveedorTF(e.target.value, e.target); pinta(); if (onChange) onChange(); });
+    document.getElementById('ph-tf')?.addEventListener('click', async () => {
+      const b = document.getElementById('ph-tf'); b.disabled = true; b.textContent = '…';
+      await exportarGrupo(g, getTerminal(), onChange, 'tf');
+      pinta();   // el pedido queda vacío → cierra la hoja
+    });
+  };
+  pinta();
+}
+
 // ── Hoja «Exportar pedido» ────────────────────────────────────────────────────
 export function openExportSheet(all, onChange) {
+  if (getTienda() === 'tf') { openExportSheetTF(all, onChange); return; }   // 🏝 Tenerife: un Excel para el proveedor elegido
   const pinta = () => {
     const grupos = agruparPorProveedor(getOrders(), all);
     if (!grupos.length) { closeSheet(); toast('El pedido está vacío', 'amber'); return; }
@@ -148,6 +212,7 @@ export function openHistorySheet(all, onChange) {
     document.getElementById('ph-repeat').addEventListener('click', () => {
       const r = repetirEnPedido(getOrders(), e.lineas, all);
       saveOrders(r.orders);
+      if (e.modo === 'tf' && e.proveedor) setProveedorTF(e.proveedor);   // 🏝 el pedido repetido vuelve con su proveedor elegido
       const partes = [];
       if (r.anadidos)     partes.push(`${r.anadidos} añadido${r.anadidos === 1 ? '' : 's'} al pedido`);
       if (r.sumados)      partes.push(`${r.sumados} sumado${r.sumados === 1 ? '' : 's'} a lo que ya había`);
@@ -158,7 +223,7 @@ export function openHistorySheet(all, onChange) {
     });
     document.getElementById('ph-again').addEventListener('click', async () => {
       const b = document.getElementById('ph-again'); b.disabled = true;
-      try { await descargaExcel(e.lineas, e.proveedor, e.terminal || getTerminal(), e.user || getUser(), e.fecha); toast('Excel descargado de nuevo', 'green'); }
+      try { await descargaExcel(e.lineas, e.proveedor, e.terminal || getTerminal(), e.user || getUser(), e.fecha, e.modo); toast('Excel descargado de nuevo', 'green'); }
       catch (err) { toast(err.message || 'No se pudo generar el Excel', 'red', 4000); }
       b.disabled = false;
     });

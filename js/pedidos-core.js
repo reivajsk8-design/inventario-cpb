@@ -2,6 +2,8 @@
 // nombre del archivo, histórico y «repetir pedido». Probado en tests/pedidos-core.test.mjs (node --test).
 // El pedido en curso es {ref: cantidad} (localStorage 'io'); el proveedor es la familia del artículo.
 
+import { claveProv, mismaClave } from './proveedores-tf.js';
+
 export const HIST_KEY = 'ioh';   // histórico de pedidos de este dispositivo
 export const HIST_MAX = 200;
 export const SIN_FAMILIA = 'SIN FAMILIA';
@@ -101,4 +103,44 @@ export function repetirEnPedido(orders, lineas, all) {
     if (out[l.ref] > 0) { out[l.ref] += n; sumados += 1; } else { out[l.ref] = n; anadidos += 1; }
   });
   return { orders: out, anadidos, sumados, desconocidos };
+}
+
+// ── Pedido ÚNICO de Tenerife (18-11-2026, Jose): allí un pedido lo sirve UN solo proveedor, elegido por la encargada, aunque los
+//    artículos tengan familias (proveedores) de Barcelona distintas. equivs = equivs.json del sync: {ref: {CLAVE_PROVEEDOR: 'código'}};
+//    alias = los del Matcher (también en equivs.json).
+
+// Código con el que el proveedor elegido conoce este artículo: su equivalencia; si no, la ref propia cuando el artículo es de ese
+// proveedor (misma familia); si no, '' (la celda del Excel queda vacía y Jose lo ve).
+export function codigoProveedor(p, proveedor, equivs, alias) {
+  const elegida = claveProv(proveedor, alias);
+  if (!p || !elegida) return '';
+  const m = (equivs && equivs[p.ref]) || null;
+  if (m) { for (const k of Object.keys(m)) { if (mismaClave(k, elegida) && m[k]) return clean(m[k]); } }
+  return mismaClave(claveProv(p.family, alias), elegida) ? clean(p.proxium) : '';
+}
+
+// Todo el pedido en curso como UN grupo para ese proveedor (mismo formato que los grupos de agruparPorProveedor, más el código
+// del proveedor por línea y cuántas lo tienen). Coste = el de Tenerife si lo hay, si no el normal.
+export function pedidoUnico(orders, all, proveedor, equivs, alias) {
+  const porRef = new Map((all || []).map((p) => [p.ref, p]));
+  const prov = clean(proveedor).trim();
+  const lines = [];
+  Object.entries(orders || {}).forEach(([ref, qty]) => {
+    const n = Number(qty) || 0;
+    const p = porRef.get(ref);
+    if (n <= 0 || !p) return;
+    const costTf = p.cost_tf != null && p.cost_tf !== '' && Number(p.cost_tf) > 0 ? Number(p.cost_tf) : null;
+    lines.push({ ref: p.ref, name: clean(p.name), ean: clean(p.ean), proxium: clean(p.proxium), family: clean(p.family).trim() || SIN_FAMILIA,
+      qty: n, cost: costTf != null ? costTf : (Number(p.cost) || 0), codProv: codigoProveedor(p, prov, equivs, alias) });
+  });
+  lines.sort((a, b) => b.qty - a.qty || a.name.localeCompare(b.name, 'es'));
+  return { family: prov, proveedor: prov, lines, refs: lines.length, uds: lines.reduce((s, l) => s + l.qty, 0), conCodigo: lines.filter((l) => l.codProv).length };
+}
+
+// Filas del Excel de Tenerife: código Proxium + proveedor del pedido y SU código (para que Jose haga la compra), familia de Barcelona de referencia.
+export function filasExcelTF(lines, user, terminal, proveedor) {
+  return [
+    ['Usuario', 'Terminal', 'Código Proxium', 'Nombre', 'EAN', 'Proveedor del pedido', 'Código del proveedor', 'Familia (Barcelona)', 'Cantidad pedida', 'Coste'],
+    ...(lines || []).map((l) => [clean(user), clean(terminal), l.ref, l.name, l.ean, clean(proveedor), clean(l.codProv), l.family === SIN_FAMILIA ? '' : l.family, l.qty, l.cost]),
+  ];
 }

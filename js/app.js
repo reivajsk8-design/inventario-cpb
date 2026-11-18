@@ -3,6 +3,7 @@ import { openDB, getAllProducts, loadProductsFromNetwork,
          saveProductsToDB, getStoredDBVersion,
          setStoredDBVersion, fetchRemoteVersion } from './db.js';
 import { loadEansExtra } from './eans.js';
+import { loadEquivs } from './equivs.js';
 import { mount as mountLista,    unmount as unmountLista    } from './lista.js';
 import { mount as mountConteos,  unmount as unmountConteos  } from './conteos.js';
 import { mount as mountPedidos,  unmount as unmountPedidos  } from './pedidos.js';
@@ -120,6 +121,7 @@ async function init() {
   await ensureUserName();
   await ensureTienda();
   await loadEansExtra();
+  await loadEquivs();   // 🔗 (18-11-2026) códigos de proveedor para el pedido único de Tenerife
 
   const products = await getAllProducts();
   if (products.length === 0) {
